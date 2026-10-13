@@ -24,6 +24,21 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
+/**
+ * Sucursal activa (X-Branch-Uuid): el backend acota el alcance de cada
+ * petición a la sucursal activa del usuario; cambiarla no amplía el alcance,
+ * solo elige entre las sucursales asignadas en el token.
+ */
+let activeBranchUuid: string | null = null;
+
+export function setActiveBranchHeader(branchUuid: string | null): void {
+  activeBranchUuid = branchUuid;
+}
+
+export function getActiveBranchHeader(): string | null {
+  return activeBranchUuid;
+}
+
 export const api = axios.create({
   baseURL,
   headers: { 'Content-Type': 'application/json' },
@@ -32,6 +47,9 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
+  }
+  if (activeBranchUuid) {
+    config.headers['X-Branch-Uuid'] = activeBranchUuid;
   }
   return config;
 });

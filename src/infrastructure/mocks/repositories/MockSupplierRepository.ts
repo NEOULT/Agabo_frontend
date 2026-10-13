@@ -1,42 +1,39 @@
-import type { ISupplierRepository } from '@/domain/repositories';
-import type {
-  Supplier,
-  CreateSupplierDTO,
-  UpdateSupplierDTO,
-  SupplierProduct,
-  PurchaseOrder,
-  CreatePurchaseOrderDTO,
-} from '@/domain/models';
-import { MOCK_SUPPLIERS } from '@/infrastructure/mocks/data';
+import type { ISupplierRepository, SupplierQueryParams } from '@/domain/repositories';
+import type { Supplier, CreateSupplierDTO, UpdateSupplierDTO } from '@/domain/models';
+import { MOCK_COMPANY_ID, MOCK_SUPPLIERS } from '@/infrastructure/mocks/data';
 
+/**
+ * Mock del repositorio de proveedores. Replica las reglas del backend:
+ * - El código es único dentro de la empresa y no es editable.
+ * - No se eliminan proveedores: se activan/desactivan.
+ */
 export class MockSupplierRepository implements ISupplierRepository {
-  private suppliers: Supplier[] = [...MOCK_SUPPLIERS.map((s) => ({
-    ...s,
-    contact_name: s.contact_name || '',
-    email: s.email || '',
-    phone: s.phone || '',
-    is_active: s.is_active ?? true,
-  }))];
+  private suppliers: Supplier[] = [...MOCK_SUPPLIERS];
 
-  private purchaseOrders: PurchaseOrder[] = [];
-
-  async getAll(params?: { page?: number; limit?: number; search?: string }) {
+  async getAll(params?: SupplierQueryParams) {
     let filtered = [...this.suppliers];
 
     if (params?.search) {
       const search = params.search.toLowerCase();
       filtered = filtered.filter(
-        (s) =>
-          s.business_name.toLowerCase().includes(search) ||
-          s.contact_name.toLowerCase().includes(search),
+        (s) => s.name.toLowerCase().includes(search) || s.code.toLowerCase().includes(search),
       );
     }
 
-    const total = filtered.length;
-    if (params?.page && params?.limit) {
-      const start = (params.page - 1) * params.limit;
-      filtered = filtered.slice(start, start + params.limit);
+    if (params?.code) {
+      const code = params.code.toLowerCase();
+      filtered = filtered.filter((s) => s.code.toLowerCase() === code);
     }
+
+    if (params?.taxId) {
+      filtered = filtered.filter((s) => s.tax_id === params.taxId);
+    }
+
+    if (params?.isActive !== undefined) {
+      filtered = filtered.filter((s) => s.is_active === params.isActive);
+    }
+
+    const total = filtered.length;
 
     await new Promise((r) => setTimeout(r, 200));
     return { data: filtered, total };
@@ -47,60 +44,65 @@ export class MockSupplierRepository implements ISupplierRepository {
     return this.suppliers.find((s) => s.id === id) ?? null;
   }
 
-  async getProducts(_supplierId: string) {
-    await new Promise((r) => setTimeout(r, 150));
-    return [] as SupplierProduct[];
-  }
-
   async create(data: CreateSupplierDTO) {
     await new Promise((r) => setTimeout(r, 200));
-    const newSupplier: Supplier = {
+
+    const codeExists = this.suppliers.some(
+      (s) => s.company_id === MOCK_COMPANY_ID && s.code.toLowerCase() === data.code.toLowerCase(),
+    );
+    if (codeExists) {
+      throw new Error(`Ya existe un proveedor con el código "${data.code}".`);
+    }
+
+    const supplier: Supplier = {
       id: `supp-${Date.now()}`,
-      ...data,
+      company_id: MOCK_COMPANY_ID,
+      code: data.code,
+      name: data.name,
+      tax_id: data.tax_id,
+      email: data.email,
+      phone: data.phone,
       is_active: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    this.suppliers.push(newSupplier);
-    return newSupplier;
+    this.suppliers.push(supplier);
+    return supplier;
   }
 
   async update(id: string, data: UpdateSupplierDTO) {
     await new Promise((r) => setTimeout(r, 200));
     const index = this.suppliers.findIndex((s) => s.id === id);
     if (index === -1) throw new Error(`Proveedor con id ${id} no encontrado`);
-    this.suppliers[index] = { ...this.suppliers[index], ...data, updated_at: new Date().toISOString() };
+
+    const current = this.suppliers[index];
+    this.suppliers[index] = {
+      ...current,
+      name: data.name ?? current.name,
+      // null limpia el campo opcional (comportamiento del backend)
+      tax_id: data.tax_id === undefined ? current.tax_id : data.tax_id ?? undefined,
+      email: data.email === undefined ? current.email : data.email ?? undefined,
+      phone: data.phone === undefined ? current.phone : data.phone ?? undefined,
+      updated_at: new Date().toISOString(),
+    };
     return this.suppliers[index];
   }
 
-  async delete(id: string) {
+  async setActive(id: string) {
     await new Promise((r) => setTimeout(r, 200));
-    this.suppliers = this.suppliers.filter((s) => s.id !== id);
+    const index = this.suppliers.findIndex((s) => s.id === id);
+    if (index === -1) throw new Error(`Proveedor con id ${id} no encontrado`);
+
+    this.suppliers[index] = { ...this.suppliers[index], is_active: true, updated_at: new Date().toISOString() };
+    return this.suppliers[index];
   }
 
-  async getPurchaseOrders() {
-    return this.purchaseOrders;
-  }
-
-  async createPurchaseOrder(data: CreatePurchaseOrderDTO) {
+  async setInactive(id: string) {
     await new Promise((r) => setTimeout(r, 200));
-    const order: PurchaseOrder = {
-      id: `po-${Date.now()}`,
-      ...data,
-      status: 'pending',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    this.purchaseOrders.push(order);
-    return order;
-  }
+    const index = this.suppliers.findIndex((s) => s.id === id);
+    if (index === -1) throw new Error(`Proveedor con id ${id} no encontrado`);
 
-  async updatePurchaseOrderStatus(id: string, status: PurchaseOrder['status']) {
-    await new Promise((r) => setTimeout(r, 150));
-    const order = this.purchaseOrders.find((o) => o.id === id);
-    if (!order) throw new Error(`Orden de compra ${id} no encontrada`);
-    order.status = status;
-    order.updated_at = new Date().toISOString();
-    return order;
+    this.suppliers[index] = { ...this.suppliers[index], is_active: false, updated_at: new Date().toISOString() };
+    return this.suppliers[index];
   }
 }

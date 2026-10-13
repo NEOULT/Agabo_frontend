@@ -65,6 +65,7 @@ export function toUser(user: ApiPublicUser, profiles: ApiProfileRef[], branches:
 
   return {
     id: user.user_uuid,
+    company_id: user.company_uuid,
     email: user.user_email_text ?? '',
     name: fullName || user.user_username_text,
     role: deriveRole(profiles),

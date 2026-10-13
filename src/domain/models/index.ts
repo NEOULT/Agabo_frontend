@@ -22,6 +22,18 @@ export type {
 } from './branch';
 
 export type {
+  Warehouse,
+  CreateWarehouseDTO,
+  UpdateWarehouseDTO,
+} from './warehouse';
+
+export type {
+  Location,
+  CreateLocationDTO,
+  UpdateLocationDTO,
+} from './location';
+
+export type {
   Movement,
   MovementType,
   CreateMovementDTO,

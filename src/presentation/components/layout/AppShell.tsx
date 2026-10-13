@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
+import { Toaster } from '@/presentation/components/ui/Toaster';
 import { useUIStore } from '@/application/stores/useUIStore';
 
 export function AppShell() {
@@ -21,6 +22,8 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      <Toaster />
     </div>
   );
 }

@@ -9,6 +9,8 @@ export interface UserProfile {
 
 export interface User {
   id: string;
+  /** company_uuid — empresa propietaria de los datos del usuario. */
+  company_id: string;
   email: string;
   name: string;
   role: UserRole;

@@ -3,33 +3,40 @@ import type {
   IProductRepository,
   ISupplierRepository,
   IBranchRepository,
+  IWarehouseRepository,
+  ILocationRepository,
   IMovementRepository,
   IAuthRepository,
 } from '@/domain/repositories';
 
 import { MockProductRepository } from '@/infrastructure/mocks/repositories/MockProductRepository';
-import { MockSupplierRepository } from '@/infrastructure/mocks/repositories/MockSupplierRepository';
-import { MockBranchRepository } from '@/infrastructure/mocks/repositories/MockBranchRepository';
 import { MockMovementRepository } from '@/infrastructure/mocks/repositories/MockMovementRepository';
 import { ApiAuthRepository } from '@/infrastructure/api/ApiAuthRepository';
+import { ApiBranchRepository } from '@/infrastructure/api/ApiBranchRepository';
+import { ApiWarehouseRepository } from '@/infrastructure/api/ApiWarehouseRepository';
+import { ApiLocationRepository } from '@/infrastructure/api/ApiLocationRepository';
+import { ApiSupplierRepository } from '@/infrastructure/api/ApiSupplierRepository';
 
 export interface Repositories {
   products: IProductRepository;
   suppliers: ISupplierRepository;
   branches: IBranchRepository;
+  warehouses: IWarehouseRepository;
+  locations: ILocationRepository;
   movements: IMovementRepository;
   auth: IAuthRepository;
 }
 
 /**
- * Auth ya consume el backend Express real (login, Google y refresh).
- * El resto de los repositorios sigue con implementaciones Mock hasta
- * conectar sus módulos.
+ * Auth, company (branches/warehouses/locations) y suppliers ya consumen el
+ * backend Express real. El resto sigue con Mock hasta conectar sus módulos.
  */
 const repositories: Repositories = {
   products: new MockProductRepository(),
-  suppliers: new MockSupplierRepository(),
-  branches: new MockBranchRepository(),
+  suppliers: new ApiSupplierRepository(),
+  branches: new ApiBranchRepository(),
+  warehouses: new ApiWarehouseRepository(),
+  locations: new ApiLocationRepository(),
   movements: new MockMovementRepository(),
   auth: new ApiAuthRepository(),
 };

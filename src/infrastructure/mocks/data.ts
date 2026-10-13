@@ -1,40 +1,123 @@
 import type { Product } from '@/domain/models/product';
 import type { Supplier } from '@/domain/models/supplier';
 import type { Branch } from '@/domain/models/branch';
+import type { Warehouse } from '@/domain/models/warehouse';
+import type { Location } from '@/domain/models/location';
 import type { User } from '@/domain/models/user';
 import type { Movement } from '@/domain/models/movement';
 import type { CategoryAttributesConfig } from '@/domain/models/attribute';
 
+export const MOCK_COMPANY_ID = 'company-001';
+
 export const MOCK_BRANCHES: Branch[] = [
   {
     id: 'branch-001',
+    company_id: MOCK_COMPANY_ID,
+    code: 'CENTRO',
     name: 'Sucursal Centro',
     address: 'Calle 50 #45-20, Medellín',
     phone: '604 512 3456',
-    manager_name: 'Carlos Mendoza',
     is_active: true,
     created_at: '2024-01-15T08:00:00Z',
     updated_at: '2024-06-01T10:00:00Z',
   },
   {
     id: 'branch-002',
+    company_id: MOCK_COMPANY_ID,
+    code: 'NORTE',
     name: 'Sucursal Norte',
     address: 'Av. 34 #80-15, Medellín',
     phone: '604 523 4567',
-    manager_name: 'Ana Restrepo',
     is_active: true,
     created_at: '2024-03-01T08:00:00Z',
     updated_at: '2024-06-10T10:00:00Z',
   },
   {
     id: 'branch-003',
+    company_id: MOCK_COMPANY_ID,
+    code: 'SUR',
     name: 'Sucursal Sur',
     address: 'Calle 10 #20-30, Medellín',
     phone: '604 534 5678',
-    manager_name: 'Pedro Ramírez',
     is_active: false,
     created_at: '2024-05-20T08:00:00Z',
     updated_at: '2024-07-01T10:00:00Z',
+  },
+];
+
+export const MOCK_WAREHOUSES: Warehouse[] = [
+  {
+    id: 'warehouse-001',
+    branch_id: 'branch-001',
+    code: 'PRINCIPAL',
+    name: 'Almacén Principal',
+    type: 'principal',
+    is_active: true,
+    created_at: '2024-01-20T08:00:00Z',
+    updated_at: '2024-06-01T10:00:00Z',
+  },
+  {
+    id: 'warehouse-002',
+    branch_id: 'branch-001',
+    code: 'DEVOLUCIONES',
+    name: 'Almacén de Devoluciones',
+    type: 'devoluciones',
+    is_active: true,
+    created_at: '2024-02-10T08:00:00Z',
+    updated_at: '2024-06-01T10:00:00Z',
+  },
+  {
+    id: 'warehouse-003',
+    branch_id: 'branch-002',
+    code: 'PRINCIPAL',
+    name: 'Almacén Principal Norte',
+    type: 'principal',
+    is_active: true,
+    created_at: '2024-03-05T08:00:00Z',
+    updated_at: '2024-06-10T10:00:00Z',
+  },
+];
+
+export const MOCK_LOCATIONS: Location[] = [
+  {
+    id: 'location-001',
+    warehouse_id: 'warehouse-001',
+    code: 'A1',
+    name: 'Estante A1',
+    type: 'almacenamiento',
+    is_active: true,
+    created_at: '2024-01-25T08:00:00Z',
+    updated_at: '2024-06-01T10:00:00Z',
+  },
+  {
+    id: 'location-002',
+    warehouse_id: 'warehouse-001',
+    code: 'A2',
+    name: 'Estante A2',
+    type: 'almacenamiento',
+    is_active: true,
+    created_at: '2024-01-25T08:00:00Z',
+    updated_at: '2024-06-01T10:00:00Z',
+  },
+  {
+    id: 'location-003',
+    warehouse_id: 'warehouse-001',
+    code: 'RECEP',
+    name: 'Zona de Recepción',
+    type: 'recepcion',
+    is_active: true,
+    created_at: '2024-01-25T08:00:00Z',
+    updated_at: '2024-06-01T10:00:00Z',
+  },
+  {
+    id: 'location-004',
+    warehouse_id: 'warehouse-003',
+    code: 'B1',
+    name: 'Estante B1',
+    type: 'almacenamiento',
+    is_active: true,
+    created_at: '2024-03-10T08:00:00Z',
+    updated_at: '2024-06-10T10:00:00Z',
   },
 ];
 
@@ -224,37 +307,36 @@ export const MOCK_STOCK: Record<string, Record<string, number>> = {
 export const MOCK_SUPPLIERS: Supplier[] = [
   {
     id: 'supp-001',
-    business_name: 'Distribuidora de Alimentos S.A.S.',
-    contact_name: 'Luis Fernando Pérez',
-    email: 'luis@distalimentos.com',
+    company_id: MOCK_COMPANY_ID,
+    code: 'PRV-0001',
+    name: 'Distribuidora de Alimentos S.A.S.',
+    tax_id: 'NIT-900123456-1',
+    email: 'ventas@distalimentos.com',
     phone: '604 311 2233',
-    address: 'Cra 48 # 20-15, Medellín',
-    notes: 'Pago a 30 días',
     is_active: true,
     created_at: '2024-01-10T00:00:00Z',
     updated_at: '2024-06-01T00:00:00Z',
   },
   {
     id: 'supp-002',
-    business_name: 'Lácteos del Valle Ltda.',
-    contact_name: 'María García',
+    company_id: MOCK_COMPANY_ID,
+    code: 'PRV-0002',
+    name: 'Lácteos del Valle Ltda.',
+    tax_id: 'NIT-800456789-2',
     email: 'ventas@lacteosvalle.com',
     phone: '602 422 3344',
-    address: 'Av. 3 # 10-20, Cali',
-    notes: 'Descuento por volumen',
     is_active: true,
     created_at: '2024-02-05T00:00:00Z',
     updated_at: '2024-06-10T00:00:00Z',
   },
   {
     id: 'supp-003',
-    business_name: 'Aseo Total S.A.',
-    contact_name: 'Andrés Mejía',
-    email: 'andres@aseototal.com',
+    company_id: MOCK_COMPANY_ID,
+    code: 'PRV-0003',
+    name: 'Aseo Total S.A.',
+    email: 'contacto@aseototal.com',
     phone: '604 533 4455',
-    address: 'Cra 65 # 30-10, Medellín',
-    notes: '',
-    is_active: true,
+    is_active: false,
     created_at: '2024-03-15T00:00:00Z',
     updated_at: '2024-06-20T00:00:00Z',
   },
@@ -263,6 +345,7 @@ export const MOCK_SUPPLIERS: Supplier[] = [
 export const MOCK_USERS: User[] = [
   {
     id: 'user-001',
+    company_id: MOCK_COMPANY_ID,
     email: 'admin@agabo.com',
     name: 'Juan Admin',
     role: 'super_admin',
@@ -280,6 +363,7 @@ export const MOCK_USERS: User[] = [
   },
   {
     id: 'user-002',
+    company_id: MOCK_COMPANY_ID,
     email: 'encargado@agabo.com',
     name: 'Carlos Sede Centro',
     role: 'branch_admin',
@@ -297,6 +381,7 @@ export const MOCK_USERS: User[] = [
   },
   {
     id: 'user-003',
+    company_id: MOCK_COMPANY_ID,
     email: 'visor@agabo.com',
     name: 'María Visora',
     role: 'viewer',
