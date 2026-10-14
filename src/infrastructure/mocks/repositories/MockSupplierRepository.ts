@@ -4,7 +4,6 @@ import { MOCK_COMPANY_ID, MOCK_SUPPLIERS } from '@/infrastructure/mocks/data';
 
 /**
  * Mock del repositorio de proveedores. Replica las reglas del backend:
- * - El código es único dentro de la empresa y no es editable.
  * - No se eliminan proveedores: se activan/desactivan.
  */
 export class MockSupplierRepository implements ISupplierRepository {
@@ -15,14 +14,7 @@ export class MockSupplierRepository implements ISupplierRepository {
 
     if (params?.search) {
       const search = params.search.toLowerCase();
-      filtered = filtered.filter(
-        (s) => s.name.toLowerCase().includes(search) || s.code.toLowerCase().includes(search),
-      );
-    }
-
-    if (params?.code) {
-      const code = params.code.toLowerCase();
-      filtered = filtered.filter((s) => s.code.toLowerCase() === code);
+      filtered = filtered.filter((s) => s.name.toLowerCase().includes(search));
     }
 
     if (params?.taxId) {
@@ -47,17 +39,9 @@ export class MockSupplierRepository implements ISupplierRepository {
   async create(data: CreateSupplierDTO) {
     await new Promise((r) => setTimeout(r, 200));
 
-    const codeExists = this.suppliers.some(
-      (s) => s.company_id === MOCK_COMPANY_ID && s.code.toLowerCase() === data.code.toLowerCase(),
-    );
-    if (codeExists) {
-      throw new Error(`Ya existe un proveedor con el código "${data.code}".`);
-    }
-
     const supplier: Supplier = {
       id: `supp-${Date.now()}`,
       company_id: MOCK_COMPANY_ID,
-      code: data.code,
       name: data.name,
       tax_id: data.tax_id,
       email: data.email,

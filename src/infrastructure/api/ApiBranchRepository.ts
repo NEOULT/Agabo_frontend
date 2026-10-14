@@ -11,7 +11,6 @@ import { toBranch, type ApiBranch, type ApiBranchListResponse } from './branch.m
  * Notas del contrato:
  * - No hay paginación: GET /api/branches devuelve todos los ítems filtrados.
  * - No hay DELETE: se usan los endpoints dedicados activate/deactivate.
- * - El código (`branch_code_text`) solo se envía al crear; PATCH lo rechaza.
  */
 export class ApiBranchRepository implements IBranchRepository {
   async getAll(params?: BranchQueryParams): Promise<{ data: Branch[]; total: number }> {
@@ -20,7 +19,6 @@ export class ApiBranchRepository implements IBranchRepository {
       // envían los filtros realmente activos.
       const query: Record<string, string> = {};
       if (params?.search) query.branch_name_text = params.search;
-      if (params?.code) query.branch_code_text = params.code;
       if (params?.isActive !== undefined) query.branch_is_active_bl = String(params.isActive);
 
       const { data } = await api.get<ApiBranchListResponse>('/branches', { params: query });
@@ -51,7 +49,6 @@ export class ApiBranchRepository implements IBranchRepository {
     try {
       const { data: created } = await api.post<ApiBranch>('/branches', {
         company_uuid: data.company_id,
-        branch_code_text: data.code,
         branch_name_text: data.name,
         branch_address_text: data.address ?? null,
         branch_phone_text: data.phone ?? null,
@@ -65,8 +62,8 @@ export class ApiBranchRepository implements IBranchRepository {
 
   async update(id: string, data: UpdateBranchDTO): Promise<Branch> {
     try {
-      // El backend rechaza campos no editables (company_uuid, code) con 400,
-      // así que solo se envían los que el usuario modificó.
+      // El backend rechaza company_uuid con 400, así que solo se envían los
+      // campos que el usuario modificó.
       const payload: Record<string, string | null> = {};
       if (data.name !== undefined) payload.branch_name_text = data.name;
       if (data.address !== undefined) payload.branch_address_text = data.address;

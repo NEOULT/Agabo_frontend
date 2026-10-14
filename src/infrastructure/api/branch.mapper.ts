@@ -7,7 +7,6 @@ import type { Branch } from '@/domain/models';
 export interface ApiBranch {
   branch_uuid: string;
   company_uuid: string;
-  branch_code_text: string;
   branch_name_text: string;
   branch_address_text: string | null;
   branch_phone_text: string | null;
@@ -27,7 +26,6 @@ export function toBranch(apiBranch: ApiBranch): Branch {
   return {
     id: apiBranch.branch_uuid,
     company_id: apiBranch.company_uuid,
-    code: apiBranch.branch_code_text,
     name: apiBranch.branch_name_text,
     address: apiBranch.branch_address_text ?? undefined,
     phone: apiBranch.branch_phone_text ?? undefined,

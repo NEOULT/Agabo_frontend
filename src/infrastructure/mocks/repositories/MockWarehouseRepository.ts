@@ -4,9 +4,8 @@ import { MOCK_WAREHOUSES } from '@/infrastructure/mocks/data';
 
 /**
  * Mock del repositorio de almacenes. Replica las reglas del backend:
- * - El código es único dentro de la sucursal.
  * - No se eliminan almacenes: se activan/desactivan.
- * - El código es editable en update; la sucursal no.
+ * - La sucursal no se modifica en update.
  */
 export class MockWarehouseRepository implements IWarehouseRepository {
   private warehouses: Warehouse[] = [...MOCK_WAREHOUSES];
@@ -16,18 +15,11 @@ export class MockWarehouseRepository implements IWarehouseRepository {
 
     if (params?.search) {
       const search = params.search.toLowerCase();
-      filtered = filtered.filter(
-        (w) => w.name.toLowerCase().includes(search) || w.code.toLowerCase().includes(search),
-      );
+      filtered = filtered.filter((w) => w.name.toLowerCase().includes(search));
     }
 
     if (params?.branchId) {
       filtered = filtered.filter((w) => w.branch_id === params.branchId);
-    }
-
-    if (params?.code) {
-      const code = params.code.toLowerCase();
-      filtered = filtered.filter((w) => w.code.toLowerCase() === code);
     }
 
     if (params?.type) {
@@ -52,17 +44,9 @@ export class MockWarehouseRepository implements IWarehouseRepository {
   async create(data: CreateWarehouseDTO) {
     await new Promise((r) => setTimeout(r, 200));
 
-    const codeExists = this.warehouses.some(
-      (w) => w.branch_id === data.branch_id && w.code.toLowerCase() === data.code.toLowerCase(),
-    );
-    if (codeExists) {
-      throw new Error(`Ya existe un almacén con el código "${data.code}" en esta sucursal.`);
-    }
-
     const warehouse: Warehouse = {
       id: `warehouse-${Date.now()}`,
       branch_id: data.branch_id,
-      code: data.code,
       name: data.name,
       type: data.type,
       is_active: true,
@@ -80,22 +64,8 @@ export class MockWarehouseRepository implements IWarehouseRepository {
 
     const current = this.warehouses[index];
 
-    // El código es editable pero debe seguir siendo único en la sucursal
-    if (data.code !== undefined && data.code.toLowerCase() !== current.code.toLowerCase()) {
-      const codeExists = this.warehouses.some(
-        (w) =>
-          w.id !== id &&
-          w.branch_id === current.branch_id &&
-          w.code.toLowerCase() === data.code!.toLowerCase(),
-      );
-      if (codeExists) {
-        throw new Error(`Ya existe un almacén con el código "${data.code}" en esta sucursal.`);
-      }
-    }
-
     this.warehouses[index] = {
       ...current,
-      code: data.code ?? current.code,
       name: data.name ?? current.name,
       // null limpia el campo opcional (comportamiento del backend)
       type: data.type === undefined ? current.type : data.type ?? undefined,

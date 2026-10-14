@@ -8,32 +8,20 @@ import { LoadingSpinner } from '@/presentation/components/shared/LoadingSpinner'
 import { useBranches } from '@/application/hooks/useBranches';
 import { useAuthStore } from '@/application/stores/useAuthStore';
 import { toast } from '@/application/stores/useToastStore';
-import { validate, required, minLength, maxLength, matches } from '@/shared/utils/validations';
+import { validate, required, minLength, maxLength } from '@/shared/utils/validations';
 
 interface BranchFormValues {
-  code: string;
   name: string;
   address: string;
   phone: string;
 }
 
-const initialValues: BranchFormValues = { code: '', name: '', address: '', phone: '' };
+const initialValues: BranchFormValues = { name: '', address: '', phone: '' };
 
 type BranchFormErrors = Partial<Record<keyof BranchFormValues, string>>;
 
-function validateForm(values: BranchFormValues, isEdit: boolean): BranchFormErrors {
+function validateForm(values: BranchFormValues): BranchFormErrors {
   const errors: BranchFormErrors = {};
-
-  // El código solo se define al crear: en edición no es editable (RF-COM-015)
-  if (!isEdit) {
-    const codeError = validate(values.code, [
-      (v) => required(v, 'El código'),
-      (v) => minLength(v, 2, 'El código'),
-      (v) => maxLength(v, 20, 'El código'),
-      (v) => matches(v, /^[A-Za-z0-9_-]+$/, 'Solo letras, números, guiones y guiones bajos.'),
-    ]);
-    if (codeError) errors.code = codeError;
-  }
 
   const nameError = validate(values.name, [
     (v) => required(v, 'El nombre'),
@@ -52,10 +40,10 @@ function validateForm(values: BranchFormValues, isEdit: boolean): BranchFormErro
 /**
  * Formulario de sucursales (crear / editar).
  *
- * - Crear: obligatorios código y nombre; el backend valida la unicidad del
- *   código y la cuota de sucursales activas de la empresa.
- * - Editar: solo nombre, dirección y teléfono; el código y la empresa no se
- *   modifican (RF-COM-012 / RF-COM-015).
+ * - Crear: obligatorios el nombre y la empresa del token; el backend valida la
+ *   cuota de sucursales activas de la empresa.
+ * - Editar: solo nombre, dirección y teléfono; la empresa no se modifica
+ *   (RF-COM-012 / RF-COM-015).
  */
 export function BranchFormPage() {
   const navigate = useNavigate();
@@ -85,7 +73,6 @@ export function BranchFormPage() {
           return;
         }
         setValues({
-          code: branch.code,
           name: branch.name,
           address: branch.address ?? '',
           phone: branch.phone ?? '',
@@ -118,7 +105,7 @@ export function BranchFormPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const validationErrors = validateForm(values, isEdit);
+    const validationErrors = validateForm(values);
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
 
@@ -138,7 +125,6 @@ export function BranchFormPage() {
         }
         await createBranch({
           company_id: companyId,
-          code: values.code.trim().toUpperCase(),
           name: values.name.trim(),
           address: values.address.trim() || undefined,
           phone: values.phone.trim() || undefined,
@@ -147,7 +133,7 @@ export function BranchFormPage() {
       }
       navigate('/company/branches');
     } catch (err) {
-      // El backend devuelve mensajes específicos (código duplicado, cuota...)
+      // El backend devuelve mensajes específicos (cuota de sucursales...)
       toast.error(err instanceof Error ? err.message : 'No se pudo guardar la sucursal.');
     } finally {
       setIsSaving(false);
@@ -184,22 +170,6 @@ export function BranchFormPage() {
 
       <Card>
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <Input
-            label="Código"
-            placeholder="Ej: CENTRO"
-            value={values.code}
-            onChange={handleChange('code')}
-            error={errors.code}
-            helperText={
-              isEdit
-                ? 'El código no se puede modificar después de crear la sucursal.'
-                : 'Identificador único dentro de la empresa. Solo letras, números y guiones.'
-            }
-            disabled={isEdit}
-            required={!isEdit}
-            maxLength={20}
-          />
-
           <Input
             label="Nombre"
             placeholder="Ej: Sucursal Centro"

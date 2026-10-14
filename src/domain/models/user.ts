@@ -1,10 +1,13 @@
+import type { PermissionMap } from './permission';
+
 export type UserRole = 'super_admin' | 'branch_admin' | 'viewer';
 
 /** Perfil asignado al usuario en la empresa (security.profile). */
 export interface UserProfile {
   profile_uuid: string;
-  profile_code_text: string;
   profile_name_text: string;
+  /** profile_is_system_bl — el perfil de sistema equivale a super_admin. */
+  profile_is_system_bl: boolean;
 }
 
 export interface User {
@@ -38,4 +41,10 @@ export interface AuthSession {
   refresh_token: string;
   /** Expiración del access token en milisegundos (epoch). */
   expires_at: number;
+  /**
+   * Permisos efectivos de la sesión, agrupados por módulo y recurso
+   * (`modules → <módulo> → <recurso> → [acciones]`). Es la vista declarativa
+   * de la misma clave que evalúa el middleware (RF-SEC-021).
+   */
+  permissions: PermissionMap;
 }

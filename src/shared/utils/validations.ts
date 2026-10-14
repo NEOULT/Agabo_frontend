@@ -49,6 +49,32 @@ export function matches(value: string, pattern: RegExp, message: string): string
 }
 
 /**
+ * Política de contraseña del backend (RN-SEC-004): mínimo 8 caracteres, con
+ * una mayúscula, una minúscula y un símbolo. El máximo de 72 respeta el
+ * límite de bcrypt.
+ */
+export const PASSWORD_POLICY = {
+  minLength: 8,
+  maxLength: 72,
+  pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).+$/,
+  hint: 'Mínimo 8 caracteres, con una mayúscula, una minúscula y un símbolo',
+};
+
+/** Valida una contraseña contra la política del backend (RN-SEC-004). */
+export function isStrongPassword(value: string): string | null {
+  if (value.length < PASSWORD_POLICY.minLength) {
+    return `La contraseña debe tener al menos ${PASSWORD_POLICY.minLength} caracteres`;
+  }
+  if (value.length > PASSWORD_POLICY.maxLength) {
+    return `La contraseña no puede superar ${PASSWORD_POLICY.maxLength} caracteres`;
+  }
+  if (!PASSWORD_POLICY.pattern.test(value)) {
+    return 'La contraseña debe incluir una mayúscula, una minúscula y un símbolo';
+  }
+  return null;
+}
+
+/**
  * Ejecuta varias validaciones sobre un valor y devuelve el primer error
  * encontrado (o null si todas pasan).
  */

@@ -11,8 +11,6 @@ import { toWarehouse, type ApiWarehouse, type ApiWarehouseListResponse } from '.
  * Notas del contrato:
  * - No hay paginación: GET /api/warehouses devuelve todos los ítems filtrados.
  * - No hay DELETE: se usan los endpoints dedicados activate/deactivate.
- * - El código SÍ es editable en PATCH (a diferencia de branch), pero el
- *   backend garantiza la unicidad dentro de la sucursal.
  * - `branch_uuid` no se acepta en PATCH: un almacén no cambia de sucursal.
  */
 export class ApiWarehouseRepository implements IWarehouseRepository {
@@ -23,7 +21,6 @@ export class ApiWarehouseRepository implements IWarehouseRepository {
       const query: Record<string, string> = {};
       if (params?.search) query.warehouse_name_text = params.search;
       if (params?.branchId) query.branch_uuid = params.branchId;
-      if (params?.code) query.warehouse_code_text = params.code;
       if (params?.type) query.warehouse_type_text = params.type;
       if (params?.isActive !== undefined) query.warehouse_is_active_bl = String(params.isActive);
 
@@ -55,7 +52,6 @@ export class ApiWarehouseRepository implements IWarehouseRepository {
     try {
       const { data: created } = await api.post<ApiWarehouse>('/warehouses', {
         branch_uuid: data.branch_id,
-        warehouse_code_text: data.code,
         warehouse_name_text: data.name,
         warehouse_type_text: data.type ?? null,
       });
@@ -68,10 +64,9 @@ export class ApiWarehouseRepository implements IWarehouseRepository {
 
   async update(id: string, data: UpdateWarehouseDTO): Promise<Warehouse> {
     try {
-      // El backend rechaza branch_uuid con 400; code/name/type son editables.
+      // El backend rechaza branch_uuid con 400; name/type son editables.
       // Solo se envían los campos que el usuario modificó.
       const payload: Record<string, string | null> = {};
-      if (data.code !== undefined) payload.warehouse_code_text = data.code;
       if (data.name !== undefined) payload.warehouse_name_text = data.name;
       if (data.type !== undefined) payload.warehouse_type_text = data.type;
 

@@ -3,7 +3,6 @@
  *
  * Alineado al contrato del backend (`docs/schema-company/api-contract-branch.md`):
  * - Cada sucursal pertenece a una empresa (`company_id`).
- * - `code` es único dentro de la empresa (no se puede cambiar después).
  * - Las sucursales no se eliminan: se activan/desactivan (RN-COM-016).
  */
 export interface Branch {
@@ -11,8 +10,6 @@ export interface Branch {
   id: string;
   /** company_uuid — empresa propietaria de la sucursal */
   company_id: string;
-  /** branch_code_text — código único dentro de la empresa */
-  code: string;
   /** branch_name_text */
   name: string;
   /** branch_address_text */
@@ -29,15 +26,13 @@ export interface Branch {
 
 export interface CreateBranchDTO {
   company_id: string;
-  code: string;
   name: string;
   address?: string;
   phone?: string;
 }
 
 /**
- * El backend solo acepta nombre, dirección y teléfono en PATCH:
- * `company_id` y `code` se rechazan con 400 (RF-COM-015).
+ * El backend solo acepta nombre, dirección y teléfono en PATCH (RF-COM-015).
  * El estado se cambia con los endpoints dedicados activate/deactivate.
  */
 export interface UpdateBranchDTO {

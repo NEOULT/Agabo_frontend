@@ -4,25 +4,7 @@ import { KeyRound, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/Button';
 import { Card } from '@/presentation/components/ui/Card';
 import { useAuth } from '@/application/hooks/useAuth';
-
-/**
- * Política de contraseña del backend (RN-SEC-004): mínimo 8 caracteres,
- * una mayúscula, una minúscula y un símbolo.
- */
-const PASSWORD_POLICY = {
-  minLength: 8,
-  pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).+$/,
-};
-
-function validatePassword(password: string): string | null {
-  if (password.length < PASSWORD_POLICY.minLength) {
-    return 'La contraseña debe tener al menos 8 caracteres';
-  }
-  if (!PASSWORD_POLICY.pattern.test(password)) {
-    return 'La contraseña debe incluir una mayúscula, una minúscula y un símbolo';
-  }
-  return null;
-}
+import { PASSWORD_POLICY, isStrongPassword } from '@/shared/utils/validations';
 
 export function ChangePasswordPage() {
   const navigate = useNavigate();
@@ -50,7 +32,7 @@ export function ChangePasswordPage() {
       errors.current = 'Ingresa tu contraseña actual';
     }
 
-    const policyError = validatePassword(newPassword);
+    const policyError = isStrongPassword(newPassword);
     if (policyError) {
       errors.next = policyError;
     }
@@ -135,9 +117,7 @@ export function ChangePasswordPage() {
               <p className="text-sm text-semantic-danger-600">{fieldErrors.next}</p>
             )}
             {!fieldErrors.next && (
-              <p className="text-xs text-text-tertiary">
-                Mínimo 8 caracteres, con una mayúscula, una minúscula y un símbolo
-              </p>
+              <p className="text-xs text-text-tertiary">{PASSWORD_POLICY.hint}</p>
             )}
           </div>
 

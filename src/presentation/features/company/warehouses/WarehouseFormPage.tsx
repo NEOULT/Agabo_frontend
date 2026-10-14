@@ -9,16 +9,15 @@ import { LoadingSpinner } from '@/presentation/components/shared/LoadingSpinner'
 import { useWarehouses } from '@/application/hooks/useWarehouses';
 import { useBranchStore } from '@/application/stores/useBranchStore';
 import { toast } from '@/application/stores/useToastStore';
-import { validate, required, minLength, maxLength, matches } from '@/shared/utils/validations';
+import { validate, required, minLength, maxLength } from '@/shared/utils/validations';
 
 interface WarehouseFormValues {
   branch_id: string;
-  code: string;
   name: string;
   type: string;
 }
 
-const initialValues: WarehouseFormValues = { branch_id: '', code: '', name: '', type: '' };
+const initialValues: WarehouseFormValues = { branch_id: '', name: '', type: '' };
 
 type WarehouseFormErrors = Partial<Record<keyof WarehouseFormValues, string>>;
 
@@ -28,14 +27,6 @@ function validateForm(values: WarehouseFormValues): WarehouseFormErrors {
   if (!values.branch_id) {
     errors.branch_id = 'Selecciona una sucursal.';
   }
-
-  const codeError = validate(values.code, [
-    (v) => required(v, 'El código'),
-    (v) => minLength(v, 2, 'El código'),
-    (v) => maxLength(v, 50, 'El código'),
-    (v) => matches(v, /^[A-Za-z0-9_-]+$/, 'Solo letras, números, guiones y guiones bajos.'),
-  ]);
-  if (codeError) errors.code = codeError;
 
   const nameError = validate(values.name, [
     (v) => required(v, 'El nombre'),
@@ -54,10 +45,10 @@ function validateForm(values: WarehouseFormValues): WarehouseFormErrors {
 /**
  * Formulario de almacenes (crear / editar).
  *
- * - Crear: obligatorios sucursal, código y nombre; el backend valida la
- *   unicidad del código dentro de la sucursal y que la sucursal esté activa.
- * - Editar: código, nombre y tipo son editables (RF-COM-018), pero la
- *   sucursal NO se puede cambiar (RF-COM-021).
+ * - Crear: obligatorios sucursal y nombre; el backend valida que la sucursal
+ *   exista y esté activa.
+ * - Editar: nombre y tipo son editables (RF-COM-018), pero la sucursal NO se
+ *   puede cambiar (RF-COM-021).
  */
 export function WarehouseFormPage() {
   const navigate = useNavigate();
@@ -102,7 +93,6 @@ export function WarehouseFormPage() {
         }
         setValues({
           branch_id: warehouse.branch_id,
-          code: warehouse.code,
           name: warehouse.name,
           type: warehouse.type ?? '',
         });
@@ -141,7 +131,6 @@ export function WarehouseFormPage() {
     try {
       if (isEdit && id) {
         await updateWarehouse(id, {
-          code: values.code.trim().toUpperCase(),
           name: values.name.trim(),
           type: values.type.trim() || null,
         });
@@ -149,7 +138,6 @@ export function WarehouseFormPage() {
       } else {
         await createWarehouse({
           branch_id: values.branch_id,
-          code: values.code.trim().toUpperCase(),
           name: values.name.trim(),
           type: values.type.trim() || undefined,
         });
@@ -157,7 +145,7 @@ export function WarehouseFormPage() {
       }
       navigate('/company/warehouses');
     } catch (err) {
-      // El backend devuelve mensajes específicos (código duplicado, padre inactivo...)
+      // El backend devuelve mensajes específicos (padre inactivo, nombre inválido...)
       toast.error(err instanceof Error ? err.message : 'No se pudo guardar el almacén.');
     } finally {
       setIsSaving(false);
@@ -214,17 +202,6 @@ export function WarehouseFormPage() {
               required
             />
           )}
-
-          <Input
-            label="Código"
-            placeholder="Ej: PRINCIPAL"
-            value={values.code}
-            onChange={handleChange('code')}
-            error={errors.code}
-            helperText="Identificador único dentro de la sucursal. Solo letras, números y guiones."
-            required
-            maxLength={50}
-          />
 
           <Input
             label="Nombre"

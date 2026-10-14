@@ -6,8 +6,6 @@ import type { SearchParams } from '@/shared/types/common';
  * El backend combina los filtros enviados con AND.
  */
 export interface BranchQueryParams extends SearchParams {
-  /** Filtro exacto por código (branch_code_text). */
-  code?: string;
   /** Filtro por estado (branch_is_active_bl). */
   isActive?: boolean;
 }

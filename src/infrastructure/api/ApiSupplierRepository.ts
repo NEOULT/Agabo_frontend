@@ -11,7 +11,7 @@ import { toSupplier, type ApiSupplier, type ApiSupplierListResponse } from './su
  * Notas del contrato:
  * - No hay paginación: GET /api/suppliers devuelve todos los ítems filtrados.
  * - No hay DELETE: se usan los endpoints dedicados activate/deactivate.
- * - El código no es editable en PATCH; la empresa la determina el token.
+ * - La empresa la determina el token.
  */
 export class ApiSupplierRepository implements ISupplierRepository {
   async getAll(params?: SupplierQueryParams): Promise<{ data: Supplier[]; total: number }> {
@@ -20,7 +20,6 @@ export class ApiSupplierRepository implements ISupplierRepository {
       // envían los filtros realmente activos.
       const query: Record<string, string> = {};
       if (params?.search) query.supplier_name_text = params.search;
-      if (params?.code) query.supplier_code_text = params.code;
       if (params?.taxId) query.supplier_tax_id_text = params.taxId;
       if (params?.isActive !== undefined) query.supplier_is_active_bl = String(params.isActive);
 
@@ -51,7 +50,6 @@ export class ApiSupplierRepository implements ISupplierRepository {
   async create(data: CreateSupplierDTO): Promise<Supplier> {
     try {
       const { data: created } = await api.post<ApiSupplier>('/suppliers', {
-        supplier_code_text: data.code,
         supplier_name_text: data.name,
         supplier_tax_id_text: data.tax_id ?? null,
         supplier_email_text: data.email ?? null,
@@ -66,8 +64,7 @@ export class ApiSupplierRepository implements ISupplierRepository {
 
   async update(id: string, data: UpdateSupplierDTO): Promise<Supplier> {
     try {
-      // El backend rechaza supplier_code_text con 400; solo se envían los
-      // campos que el usuario modificó (null limpia los opcionales).
+      // Solo se envían los campos que el usuario modificó (null limpia los opcionales).
       const payload: Record<string, string | null> = {};
       if (data.name !== undefined) payload.supplier_name_text = data.name;
       if (data.tax_id !== undefined) payload.supplier_tax_id_text = data.tax_id;

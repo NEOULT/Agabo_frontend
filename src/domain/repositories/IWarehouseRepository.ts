@@ -8,8 +8,6 @@ import type { SearchParams } from '@/shared/types/common';
 export interface WarehouseQueryParams extends SearchParams {
   /** Filtra por sucursal propietaria (branch_uuid). */
   branchId?: string;
-  /** Filtro exacto por código (warehouse_code_text). */
-  code?: string;
   /** Filtro por tipo descriptivo (warehouse_type_text), coincidencia exacta. */
   type?: string;
   /** Filtro por estado (warehouse_is_active_bl). */

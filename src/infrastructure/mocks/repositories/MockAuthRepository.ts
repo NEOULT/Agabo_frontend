@@ -26,6 +26,9 @@ export class MockAuthRepository implements IAuthRepository {
       access_token: `mock-token-${user.id}-${Date.now()}`,
       refresh_token: `mock-refresh-${user.id}-${Date.now()}`,
       expires_at: Date.now() + 3600000, // 1 hora
+      // El mock no reproduce el catálogo de permisos: la interfaz cae al
+      // respaldo por rol cuando el mapa viene vacío.
+      permissions: { modules: {} },
     };
 
     return this.currentSession;

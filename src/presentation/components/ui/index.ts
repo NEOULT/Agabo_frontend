@@ -4,6 +4,7 @@ export { Card, CardHeader, CardTitle } from './Card';
 export { Badge } from './Badge';
 export { Modal } from './Modal';
 export { Select } from './Select';
+export { Switch } from './Switch';
 export { Textarea } from './Textarea';
 export { ConfirmDialog } from './ConfirmDialog';
 export { Table, type TableColumn } from './Table';

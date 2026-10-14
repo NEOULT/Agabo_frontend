@@ -225,7 +225,7 @@ export function LocationFormPage() {
           {isEdit ? (
             <Input
               label="Almacén"
-              value={warehouse ? `${warehouse.code} — ${warehouse.name}` : '—'}
+              value={warehouse ? warehouse.name : '—'}
               disabled
               helperText="Una ubicación no se puede mover a otro almacén."
             />
@@ -245,7 +245,7 @@ export function LocationFormPage() {
                 label="Almacén"
                 value={values.warehouse_id}
                 onChange={handleChange('warehouse_id')}
-                options={warehouses.map((w) => ({ value: w.id, label: `${w.code} — ${w.name}` }))}
+                options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
                 placeholder={warehouses.length === 0 ? 'No hay almacenes activos en esta sucursal' : 'Selecciona un almacén'}
                 error={errors.warehouse_id}
                 disabled={!selectedBranchId || warehouses.length === 0}

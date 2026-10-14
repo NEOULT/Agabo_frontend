@@ -7,7 +7,6 @@ import type { Warehouse } from '@/domain/models';
 export interface ApiWarehouse {
   warehouse_uuid: string;
   branch_uuid: string;
-  warehouse_code_text: string;
   warehouse_name_text: string;
   warehouse_type_text: string | null;
   warehouse_is_active_bl: boolean;
@@ -26,7 +25,6 @@ export function toWarehouse(apiWarehouse: ApiWarehouse): Warehouse {
   return {
     id: apiWarehouse.warehouse_uuid,
     branch_id: apiWarehouse.branch_uuid,
-    code: apiWarehouse.warehouse_code_text,
     name: apiWarehouse.warehouse_name_text,
     type: apiWarehouse.warehouse_type_text ?? undefined,
     is_active: apiWarehouse.warehouse_is_active_bl,

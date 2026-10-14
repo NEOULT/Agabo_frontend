@@ -1,17 +1,62 @@
-import type { Product, CreateProductDTO, UpdateProductDTO, ProductStock } from '@/domain/models';
-import type { PaginationParams, SearchParams } from '@/shared/types/common';
+import type {
+  Product,
+  ProductCode,
+  ProductUnit,
+  CreateProductDTO,
+  UpdateProductDTO,
+  CreateProductCodeDTO,
+  UpdateProductCodeDTO,
+  CreatePresentationDTO,
+  UpdatePresentationDTO,
+} from '@/domain/models';
+import type { SearchParams } from '@/shared/types/common';
 
-export interface ProductQueryParams extends PaginationParams, SearchParams {
-  branchId?: string;
-  category?: string;
+/**
+ * Filtros soportados por GET /api/products.
+ */
+export interface ProductQueryParams extends SearchParams {
+  /** Filtro exacto por categoría (category_uuid). */
+  categoryId?: string;
+  /** Filtro exacto por marca (brand_uuid). */
+  brandId?: string;
+  /** Filtro exacto por unidad base (base_unit_uuid). */
+  baseUnitId?: string;
+  /** Filtro por valor de código exacto (product_code_text). */
+  code?: string;
+  /** Filtro por estado (product_is_active_bl). */
   isActive?: boolean;
 }
 
+/**
+ * Contrato del catálogo de productos (schema catalog).
+ *
+ * Agrupa `product`, `product_code` y `product_unit` porque son un mismo
+ * agregado: los códigos y las presentaciones se administran desde el detalle
+ * del producto (RF-CAT-013 a RF-CAT-018).
+ *
+ * No existe `delete` para productos: se activan/desactivan (RF-CAT-016).
+ */
 export interface IProductRepository {
+  // --- Productos -----------------------------------------------------------
   getAll(params?: ProductQueryParams): Promise<{ data: Product[]; total: number }>;
   getById(id: string): Promise<Product | null>;
-  getStockByBranch(productId: string): Promise<ProductStock[]>;
-  create(product: CreateProductDTO): Promise<Product>;
-  update(id: string, product: UpdateProductDTO): Promise<Product>;
-  delete(id: string): Promise<void>;
+  create(data: CreateProductDTO): Promise<Product>;
+  update(id: string, data: UpdateProductDTO): Promise<Product>;
+  /** POST /api/products/{product_uuid}/activate */
+  setActive(id: string): Promise<Product>;
+  /** POST /api/products/{product_uuid}/deactivate */
+  setInactive(id: string): Promise<Product>;
+
+  // --- Códigos (RF-CAT-017) ------------------------------------------------
+  createCode(data: CreateProductCodeDTO): Promise<ProductCode>;
+  updateCode(id: string, data: UpdateProductCodeDTO): Promise<ProductCode>;
+  /** DELETE /api/product-codes/{uuid} — falla con `last_code_cannot_be_removed`. */
+  removeCode(id: string): Promise<void>;
+
+  // --- Presentaciones (RF-CAT-018) -----------------------------------------
+  createPresentation(data: CreatePresentationDTO): Promise<ProductUnit>;
+  updatePresentation(id: string, data: UpdatePresentationDTO): Promise<ProductUnit>;
+  /** La presentación base no se puede desactivar si el producto está activo. */
+  setPresentationActive(id: string): Promise<ProductUnit>;
+  setPresentationInactive(id: string): Promise<ProductUnit>;
 }

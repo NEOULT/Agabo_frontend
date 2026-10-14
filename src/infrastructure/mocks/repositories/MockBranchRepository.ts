@@ -4,9 +4,8 @@ import { MOCK_BRANCHES } from '@/infrastructure/mocks/data';
 
 /**
  * Mock del repositorio de sucursales. Replica las reglas del backend:
- * - El código es único dentro de la empresa.
  * - No se eliminan sucursales: se activan/desactivan.
- * - El código y la empresa no se modifican en update.
+ * - La empresa no se modifica en update.
  */
 export class MockBranchRepository implements IBranchRepository {
   private branches: Branch[] = [...MOCK_BRANCHES];
@@ -16,14 +15,7 @@ export class MockBranchRepository implements IBranchRepository {
 
     if (params?.search) {
       const search = params.search.toLowerCase();
-      filtered = filtered.filter(
-        (b) => b.name.toLowerCase().includes(search) || b.code.toLowerCase().includes(search),
-      );
-    }
-
-    if (params?.code) {
-      const code = params.code.toLowerCase();
-      filtered = filtered.filter((b) => b.code.toLowerCase() === code);
+      filtered = filtered.filter((b) => b.name.toLowerCase().includes(search));
     }
 
     if (params?.isActive !== undefined) {
@@ -44,17 +36,9 @@ export class MockBranchRepository implements IBranchRepository {
   async create(data: CreateBranchDTO) {
     await new Promise((r) => setTimeout(r, 200));
 
-    const codeExists = this.branches.some(
-      (b) => b.company_id === data.company_id && b.code.toLowerCase() === data.code.toLowerCase(),
-    );
-    if (codeExists) {
-      throw new Error(`Ya existe una sucursal con el código "${data.code}" en esta empresa.`);
-    }
-
     const branch: Branch = {
       id: `branch-${Date.now()}`,
       company_id: data.company_id,
-      code: data.code,
       name: data.name,
       address: data.address,
       phone: data.phone,

@@ -1,4 +1,4 @@
-import type { User, UserProfile, UserRole, AuthSession } from '@/domain/models';
+import type { User, UserProfile, UserRole, AuthSession, PermissionMap } from '@/domain/models';
 
 /**
  * Contratos crudos de la API del backend Express.
@@ -20,8 +20,8 @@ export interface ApiPublicUser {
 
 export interface ApiProfileRef {
   profile_uuid: string;
-  profile_code_text: string;
   profile_name_text: string;
+  profile_is_system_bl: boolean;
 }
 
 /** Respuesta de POST /api/auth/login. */
@@ -36,16 +36,17 @@ export interface ApiLoginResponse {
   user: ApiPublicUser;
   profiles: ApiProfileRef[];
   branches: string[];
-  permissions: Record<string, Record<string, string[]>>;
+  permissions: PermissionMap;
 }
 
 /**
  * El backend no tiene "roles": autoriza por perfiles y permisos. El frontend
  * sí usa roles para RoleGuard, así que se deriva uno provisional a partir de
- * los perfiles: el perfil de sistema (SISTEMA) equivale a super_admin.
+ * los perfiles: el perfil de sistema (profile_is_system_bl) equivale a
+ * super_admin.
  */
 function deriveRole(profiles: ApiProfileRef[]): UserRole {
-  if (profiles.some((profile) => profile.profile_code_text === 'SISTEMA')) {
+  if (profiles.some((profile) => profile.profile_is_system_bl)) {
     return 'super_admin';
   }
 
@@ -55,8 +56,8 @@ function deriveRole(profiles: ApiProfileRef[]): UserRole {
 function toUserProfile(profile: ApiProfileRef): UserProfile {
   return {
     profile_uuid: profile.profile_uuid,
-    profile_code_text: profile.profile_code_text,
     profile_name_text: profile.profile_name_text,
+    profile_is_system_bl: profile.profile_is_system_bl,
   };
 }
 
@@ -82,5 +83,6 @@ export function toAuthSession(response: ApiLoginResponse): AuthSession {
     access_token: response.access_token,
     refresh_token: response.session_refresh_text,
     expires_at: Date.parse(response.expires_at_tsz),
+    permissions: response.permissions ?? { modules: {} },
   };
 }

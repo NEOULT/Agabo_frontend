@@ -7,33 +7,21 @@ import { Input } from '@/presentation/components/ui/Input';
 import { LoadingSpinner } from '@/presentation/components/shared/LoadingSpinner';
 import { useSuppliers } from '@/application/hooks/useSuppliers';
 import { toast } from '@/application/stores/useToastStore';
-import { validate, required, minLength, maxLength, matches, isEmail } from '@/shared/utils/validations';
+import { validate, required, minLength, maxLength, isEmail } from '@/shared/utils/validations';
 
 interface SupplierFormValues {
-  code: string;
   name: string;
   tax_id: string;
   email: string;
   phone: string;
 }
 
-const initialValues: SupplierFormValues = { code: '', name: '', tax_id: '', email: '', phone: '' };
+const initialValues: SupplierFormValues = { name: '', tax_id: '', email: '', phone: '' };
 
 type SupplierFormErrors = Partial<Record<keyof SupplierFormValues, string>>;
 
-function validateForm(values: SupplierFormValues, isEdit: boolean): SupplierFormErrors {
+function validateForm(values: SupplierFormValues): SupplierFormErrors {
   const errors: SupplierFormErrors = {};
-
-  // El código solo se define al crear: en edición no es editable (RF-PUR-003)
-  if (!isEdit) {
-    const codeError = validate(values.code, [
-      (v) => required(v, 'El código'),
-      (v) => minLength(v, 2, 'El código'),
-      (v) => maxLength(v, 50, 'El código'),
-      (v) => matches(v, /^[A-Za-z0-9_-]+$/, 'Solo letras, números, guiones y guiones bajos.'),
-    ]);
-    if (codeError) errors.code = codeError;
-  }
 
   const nameError = validate(values.name, [
     (v) => required(v, 'El nombre'),
@@ -62,10 +50,8 @@ function validateForm(values: SupplierFormValues, isEdit: boolean): SupplierForm
 /**
  * Formulario de proveedores (crear / editar).
  *
- * - Crear: obligatorios código y nombre; el backend valida la unicidad del
- *   código dentro de la empresa.
- * - Editar: solo nombre, RIF/NIT, correo y teléfono; el código no es
- *   editable (RF-PUR-003).
+ * - Crear: obligatorios el nombre y la empresa del token.
+ * - Editar: nombre, RIF/NIT, correo y teléfono (RF-PUR-003).
  */
 export function SupplierFormPage() {
   const navigate = useNavigate();
@@ -94,7 +80,6 @@ export function SupplierFormPage() {
           return;
         }
         setValues({
-          code: supplier.code,
           name: supplier.name,
           tax_id: supplier.tax_id ?? '',
           email: supplier.email ?? '',
@@ -128,7 +113,7 @@ export function SupplierFormPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const validationErrors = validateForm(values, isEdit);
+    const validationErrors = validateForm(values);
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
 
@@ -144,7 +129,6 @@ export function SupplierFormPage() {
         toast.success(`El proveedor "${values.name.trim()}" fue actualizado.`);
       } else {
         await createSupplier({
-          code: values.code.trim().toUpperCase(),
           name: values.name.trim(),
           tax_id: values.tax_id.trim() || undefined,
           email: values.email.trim() || undefined,
@@ -154,7 +138,7 @@ export function SupplierFormPage() {
       }
       navigate('/suppliers');
     } catch (err) {
-      // El backend devuelve mensajes específicos (código duplicado, etc.)
+      // El backend devuelve mensajes específicos (RIF duplicado, etc.)
       toast.error(err instanceof Error ? err.message : 'No se pudo guardar el proveedor.');
     } finally {
       setIsSaving(false);
@@ -191,22 +175,6 @@ export function SupplierFormPage() {
 
       <Card>
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <Input
-            label="Código"
-            placeholder="Ej: PRV-0001"
-            value={values.code}
-            onChange={handleChange('code')}
-            error={errors.code}
-            helperText={
-              isEdit
-                ? 'El código no se puede modificar después de crear el proveedor.'
-                : 'Identificador único del proveedor en tu empresa. Solo letras, números y guiones.'
-            }
-            disabled={isEdit}
-            required={!isEdit}
-            maxLength={50}
-          />
-
           <Input
             label="Nombre"
             placeholder="Ej: Distribuidora de Alimentos S.A.S."

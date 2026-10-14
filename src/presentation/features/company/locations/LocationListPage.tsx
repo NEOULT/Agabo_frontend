@@ -11,6 +11,7 @@ import { SearchInput } from '@/presentation/components/shared/SearchInput';
 import { EmptyState } from '@/presentation/components/shared/EmptyState';
 import { useLocations } from '@/application/hooks/useLocations';
 import { useWarehouses } from '@/application/hooks/useWarehouses';
+import { usePermissions } from '@/application/hooks/usePermissions';
 import { useBranchStore } from '@/application/stores/useBranchStore';
 import { toast } from '@/application/stores/useToastStore';
 import { formatDateShort } from '@/shared/utils/format';
@@ -46,6 +47,11 @@ export function LocationListPage() {
     { type: 'activate' | 'deactivate'; location: Location } | null
   >(null);
   const [isActionLoading, setIsActionLoading] = React.useState(false);
+
+  const { can } = usePermissions();
+  const canCreate = can('company.locations:create');
+  const canUpdate = can('company.locations:update');
+  const canSetActive = can('company.locations:deactivate');
 
   const selectedBranchId = branchId || activeBranch?.id || '';
 
@@ -145,26 +151,30 @@ export function LocationListPage() {
       align: 'right',
       cell: (l) => (
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={() => navigate(`/company/locations/${l.id}/edit`)}
-            className="p-2 rounded-lg text-text-muted hover:text-brand-600 hover:bg-surface-tertiary transition-colors"
-            title="Editar ubicación"
-          >
-            <Pencil className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() =>
-              setPendingAction({ type: l.is_active ? 'deactivate' : 'activate', location: l })
-            }
-            className={`p-2 rounded-lg transition-colors ${
-              l.is_active
-                ? 'text-text-muted hover:text-semantic-danger-600 hover:bg-surface-tertiary'
-                : 'text-text-muted hover:text-semantic-success-600 hover:bg-surface-tertiary'
-            }`}
-            title={l.is_active ? 'Desactivar ubicación' : 'Activar ubicación'}
-          >
-            <Power className="h-4 w-4" />
-          </button>
+          {canUpdate && (
+            <button
+              onClick={() => navigate(`/company/locations/${l.id}/edit`)}
+              className="p-2 rounded-lg text-text-muted hover:text-brand-600 hover:bg-surface-tertiary transition-colors"
+              title="Editar ubicación"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          )}
+          {canSetActive && (
+            <button
+              onClick={() =>
+                setPendingAction({ type: l.is_active ? 'deactivate' : 'activate', location: l })
+              }
+              className={`p-2 rounded-lg transition-colors ${
+                l.is_active
+                  ? 'text-text-muted hover:text-semantic-danger-600 hover:bg-surface-tertiary'
+                  : 'text-text-muted hover:text-semantic-success-600 hover:bg-surface-tertiary'
+              }`}
+              title={l.is_active ? 'Desactivar ubicación' : 'Activar ubicación'}
+            >
+              <Power className="h-4 w-4" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -174,13 +184,15 @@ export function LocationListPage() {
     <div>
       <CardHeader>
         <CardTitle>Ubicaciones</CardTitle>
-        <Button
-          leftIcon={<Plus className="h-4 w-4" />}
-          onClick={() => navigate(`/company/locations/new${warehouseId ? `?warehouse=${warehouseId}` : ''}`)}
-          disabled={!warehouseId}
-        >
-          Nueva Ubicación
-        </Button>
+        {canCreate && (
+          <Button
+            leftIcon={<Plus className="h-4 w-4" />}
+            onClick={() => navigate(`/company/locations/new${warehouseId ? `?warehouse=${warehouseId}` : ''}`)}
+            disabled={!warehouseId}
+          >
+            Nueva Ubicación
+          </Button>
+        )}
       </CardHeader>
 
       {error && (
@@ -208,7 +220,7 @@ export function LocationListPage() {
             <Select
               value={warehouseId}
               onChange={(e) => handleWarehouseChange(e.target.value)}
-              options={warehouses.map((w) => ({ value: w.id, label: `${w.code} — ${w.name}` }))}
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
               placeholder={warehouses.length === 0 ? 'No hay almacenes en esta sucursal' : 'Selecciona un almacén'}
               disabled={!selectedBranchId || warehouses.length === 0}
               aria-label="Filtrar por almacén"
@@ -218,7 +230,7 @@ export function LocationListPage() {
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder="Buscar por nombre o código..."
+              placeholder="Buscar por nombre..."
             />
           </div>
         </div>
@@ -246,7 +258,7 @@ export function LocationListPage() {
                     : 'Registra la primera ubicación de este almacén (estantes, zonas de recepción...).'
               }
               action={
-                !search && warehouseId ? (
+                !search && warehouseId && canCreate ? (
                   <Button onClick={() => navigate(`/company/locations/new?warehouse=${warehouseId}`)}>
                     + Nueva Ubicación
                   </Button>

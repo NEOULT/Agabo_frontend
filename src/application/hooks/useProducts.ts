@@ -1,92 +1,152 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useRepositories } from '@/application/providers/RepositoryProvider';
-import { useProductStore } from '@/application/stores/useProductStore';
-import type { CreateProductDTO, UpdateProductDTO } from '@/domain/models';
+import type {
+  Product,
+  CreateProductDTO,
+  UpdateProductDTO,
+  CreateProductCodeDTO,
+  UpdateProductCodeDTO,
+  CreatePresentationDTO,
+  UpdatePresentationDTO,
+} from '@/domain/models';
 import type { ProductQueryParams } from '@/domain/repositories';
 
+/**
+ * Catálogo de productos (catalog.product).
+ *
+ * Incluye las operaciones de sus sub-entidades (códigos y presentaciones),
+ * que se administran desde el detalle del producto. Tras cada cambio en una
+ * sub-entidad se refresca el producto seleccionado para mantener los datos
+ * al día.
+ */
 export function useProducts() {
   const { products: productRepo } = useRepositories();
 
-  // Selectores individuales para evitar re-renders innecesarios
-  const products = useProductStore((state) => state.products);
-  const selectedProduct = useProductStore((state) => state.selectedProduct);
-  const stockByBranch = useProductStore((state) => state.stockByBranch);
-  const total = useProductStore((state) => state.total);
-  const isLoading = useProductStore((state) => state.isLoading);
-  const error = useProductStore((state) => state.error);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchProducts = useCallback(async (params?: ProductQueryParams) => {
-    useProductStore.getState().setLoading(true);
-    useProductStore.getState().setError(null);
+    setIsLoading(true);
+    setError(null);
     try {
       const result = await productRepo.getAll(params);
-      useProductStore.getState().setProducts(result.data);
-      useProductStore.getState().setTotal(result.total);
+      setProducts(result.data);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al cargar productos';
-      useProductStore.getState().setError(message);
+      setError(err instanceof Error ? err.message : 'Error al cargar productos');
     } finally {
-      useProductStore.getState().setLoading(false);
+      setIsLoading(false);
     }
   }, [productRepo]);
 
   const getProduct = useCallback(async (id: string) => {
-    useProductStore.getState().setLoading(true);
-    useProductStore.getState().setError(null);
+    setIsLoading(true);
+    setError(null);
     try {
       const product = await productRepo.getById(id);
-      useProductStore.getState().setSelectedProduct(product);
+      setSelectedProduct(product);
       return product;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al cargar producto';
-      useProductStore.getState().setError(message);
+      setError(err instanceof Error ? err.message : 'Error al cargar producto');
       return null;
     } finally {
-      useProductStore.getState().setLoading(false);
-    }
-  }, [productRepo]);
-
-  const getStockByBranch = useCallback(async (productId: string) => {
-    try {
-      const stock = await productRepo.getStockByBranch(productId);
-      useProductStore.getState().setStockByBranch(stock);
-      return stock;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al cargar stock';
-      useProductStore.getState().setError(message);
-      return [];
+      setIsLoading(false);
     }
   }, [productRepo]);
 
   const createProduct = useCallback(async (data: CreateProductDTO) => {
     const product = await productRepo.create(data);
-    useProductStore.getState().addProduct(product);
+    setProducts((prev) => [...prev, product]);
     return product;
   }, [productRepo]);
 
   const updateProduct = useCallback(async (id: string, data: UpdateProductDTO) => {
     const product = await productRepo.update(id, data);
-    useProductStore.getState().updateProduct(product);
+    setProducts((prev) => prev.map((p) => (p.id === id ? product : p)));
+    setSelectedProduct((prev) => (prev?.id === id ? product : prev));
     return product;
   }, [productRepo]);
 
-  const deleteProduct = useCallback(async (id: string) => {
-    await productRepo.delete(id);
-    useProductStore.getState().removeProduct(id);
+  const activateProduct = useCallback(async (id: string) => {
+    const product = await productRepo.setActive(id);
+    setProducts((prev) => prev.map((p) => (p.id === id ? product : p)));
+    return product;
   }, [productRepo]);
+
+  const deactivateProduct = useCallback(async (id: string) => {
+    const product = await productRepo.setInactive(id);
+    setProducts((prev) => prev.map((p) => (p.id === id ? product : p)));
+    return product;
+  }, [productRepo]);
+
+  // --- Códigos -------------------------------------------------------------
+  /** Refresca el producto seleccionado (tras crear/editar/retirar códigos). */
+  const refreshSelected = useCallback(async (productId: string) => {
+    const product = await productRepo.getById(productId);
+    if (product) setSelectedProduct(product);
+    return product;
+  }, [productRepo]);
+
+  const createCode = useCallback(async (data: CreateProductCodeDTO) => {
+    const code = await productRepo.createCode(data);
+    await refreshSelected(data.product_id);
+    return code;
+  }, [productRepo, refreshSelected]);
+
+  const updateCode = useCallback(async (productId: string, id: string, data: UpdateProductCodeDTO) => {
+    const code = await productRepo.updateCode(id, data);
+    await refreshSelected(productId);
+    return code;
+  }, [productRepo, refreshSelected]);
+
+  const removeCode = useCallback(async (productId: string, id: string) => {
+    await productRepo.removeCode(id);
+    await refreshSelected(productId);
+  }, [productRepo, refreshSelected]);
+
+  // --- Presentaciones ------------------------------------------------------
+  const createPresentation = useCallback(async (data: CreatePresentationDTO) => {
+    const presentation = await productRepo.createPresentation(data);
+    await refreshSelected(data.product_id);
+    return presentation;
+  }, [productRepo, refreshSelected]);
+
+  const updatePresentation = useCallback(async (productId: string, id: string, data: UpdatePresentationDTO) => {
+    const presentation = await productRepo.updatePresentation(id, data);
+    await refreshSelected(productId);
+    return presentation;
+  }, [productRepo, refreshSelected]);
+
+  const activatePresentation = useCallback(async (productId: string, id: string) => {
+    const presentation = await productRepo.setPresentationActive(id);
+    await refreshSelected(productId);
+    return presentation;
+  }, [productRepo, refreshSelected]);
+
+  const deactivatePresentation = useCallback(async (productId: string, id: string) => {
+    const presentation = await productRepo.setPresentationInactive(id);
+    await refreshSelected(productId);
+    return presentation;
+  }, [productRepo, refreshSelected]);
 
   return {
     products,
     selectedProduct,
-    stockByBranch,
-    total,
     isLoading,
     error,
     fetchProducts,
     getProduct,
-    getStockByBranch,
     createProduct,
     updateProduct,
-    deleteProduct,
+    activateProduct,
+    deactivateProduct,
+    createCode,
+    updateCode,
+    removeCode,
+    createPresentation,
+    updatePresentation,
+    activatePresentation,
+    deactivatePresentation,
   };
 }

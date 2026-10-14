@@ -10,6 +10,7 @@ import { Select } from '@/presentation/components/ui/Select';
 import { SearchInput } from '@/presentation/components/shared/SearchInput';
 import { EmptyState } from '@/presentation/components/shared/EmptyState';
 import { useWarehouses } from '@/application/hooks/useWarehouses';
+import { usePermissions } from '@/application/hooks/usePermissions';
 import { useBranchStore } from '@/application/stores/useBranchStore';
 import { toast } from '@/application/stores/useToastStore';
 import { formatDateShort } from '@/shared/utils/format';
@@ -38,6 +39,11 @@ export function WarehouseListPage() {
     { type: 'activate' | 'deactivate'; warehouse: Warehouse } | null
   >(null);
   const [isActionLoading, setIsActionLoading] = React.useState(false);
+
+  const { can } = usePermissions();
+  const canCreate = can('company.warehouses:create');
+  const canUpdate = can('company.warehouses:update');
+  const canSetActive = can('company.warehouses:deactivate');
 
   // La sucursal seleccionada: la elegida en el selector o, por defecto, la activa
   const selectedBranchId = branchId || activeBranch?.id || '';
@@ -70,11 +76,6 @@ export function WarehouseListPage() {
   };
 
   const columns: TableColumn<Warehouse>[] = [
-    {
-      key: 'code',
-      header: 'Código',
-      cell: (w) => <span className="font-mono text-xs text-text-tertiary">{w.code}</span>,
-    },
     {
       key: 'name',
       header: 'Nombre',
@@ -118,26 +119,30 @@ export function WarehouseListPage() {
           >
             <MapPin className="h-4 w-4" />
           </button>
-          <button
-            onClick={() => navigate(`/company/warehouses/${w.id}/edit`)}
-            className="p-2 rounded-lg text-text-muted hover:text-brand-600 hover:bg-surface-tertiary transition-colors"
-            title="Editar almacén"
-          >
-            <Pencil className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() =>
-              setPendingAction({ type: w.is_active ? 'deactivate' : 'activate', warehouse: w })
-            }
-            className={`p-2 rounded-lg transition-colors ${
-              w.is_active
-                ? 'text-text-muted hover:text-semantic-danger-600 hover:bg-surface-tertiary'
-                : 'text-text-muted hover:text-semantic-success-600 hover:bg-surface-tertiary'
-            }`}
-            title={w.is_active ? 'Desactivar almacén' : 'Activar almacén'}
-          >
-            <Power className="h-4 w-4" />
-          </button>
+          {canUpdate && (
+            <button
+              onClick={() => navigate(`/company/warehouses/${w.id}/edit`)}
+              className="p-2 rounded-lg text-text-muted hover:text-brand-600 hover:bg-surface-tertiary transition-colors"
+              title="Editar almacén"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          )}
+          {canSetActive && (
+            <button
+              onClick={() =>
+                setPendingAction({ type: w.is_active ? 'deactivate' : 'activate', warehouse: w })
+              }
+              className={`p-2 rounded-lg transition-colors ${
+                w.is_active
+                  ? 'text-text-muted hover:text-semantic-danger-600 hover:bg-surface-tertiary'
+                  : 'text-text-muted hover:text-semantic-success-600 hover:bg-surface-tertiary'
+              }`}
+              title={w.is_active ? 'Desactivar almacén' : 'Activar almacén'}
+            >
+              <Power className="h-4 w-4" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -147,13 +152,15 @@ export function WarehouseListPage() {
     <div>
       <CardHeader>
         <CardTitle>Almacenes</CardTitle>
-        <Button
-          leftIcon={<Plus className="h-4 w-4" />}
-          onClick={() => navigate('/company/warehouses/new')}
-          disabled={!selectedBranchId}
-        >
-          Nuevo Almacén
-        </Button>
+        {canCreate && (
+          <Button
+            leftIcon={<Plus className="h-4 w-4" />}
+            onClick={() => navigate('/company/warehouses/new')}
+            disabled={!selectedBranchId}
+          >
+            Nuevo Almacén
+          </Button>
+        )}
       </CardHeader>
 
       {error && (
@@ -177,7 +184,7 @@ export function WarehouseListPage() {
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder="Buscar por nombre o código..."
+              placeholder="Buscar por nombre..."
             />
           </div>
         </div>
@@ -197,7 +204,7 @@ export function WarehouseListPage() {
                   : 'Registra el primer almacén de esta sucursal para empezar a ubicar tu inventario.'
               }
               action={
-                !search && selectedBranchId ? (
+                !search && selectedBranchId && canCreate ? (
                   <Button onClick={() => navigate('/company/warehouses/new')}>
                     + Nuevo Almacén
                   </Button>

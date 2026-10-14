@@ -3,6 +3,9 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
+  FolderTree,
+  Tags,
+  Ruler,
   Truck,
   Building2,
   Store,
@@ -10,21 +13,33 @@ import {
   MapPin,
   ArrowLeftRight,
   BarChart3,
+  ShoppingCart,
+  PackageCheck,
+  ShieldCheck,
+  Users,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
 } from 'lucide-react';
 import { useUIStore } from '@/application/stores/useUIStore';
 import { useAuthStore } from '@/application/stores/useAuthStore';
+import { usePermissions } from '@/application/hooks/usePermissions';
+import type { PermissionKey, UserRole } from '@/domain/models';
 
 /**
  * Elemento simple de navegación (una ruta).
+ *
+ * `permissions` son claves de permiso de la vista de sesión
+ * (`<módulo>.<recurso>:<acción>`); si se indican, el acceso se resuelve con los
+ * permisos de la sesión y `roles` queda como respaldo cuando el mapa de
+ * permisos no llega.
  */
 interface NavItem {
   to: string;
   icon: React.ReactNode;
   label: string;
-  roles: string[];
+  roles: UserRole[];
+  permissions?: PermissionKey[];
 }
 
 /**
@@ -35,32 +50,81 @@ interface NavGroup {
   key: string;
   icon: React.ReactNode;
   label: string;
-  roles: string[];
+  roles: UserRole[];
+  permissions?: PermissionKey[];
   items: NavItem[];
 }
 
 const navItems: NavItem[] = [
   { to: '/', icon: <LayoutDashboard className="h-5 w-5" />, label: 'Dashboard', roles: ['super_admin', 'branch_admin', 'viewer'] },
-  { to: '/products', icon: <Package className="h-5 w-5" />, label: 'Productos', roles: ['super_admin', 'branch_admin', 'viewer'] },
-  { to: '/suppliers', icon: <Truck className="h-5 w-5" />, label: 'Proveedores', roles: ['super_admin', 'branch_admin'] },
 ];
 
 const navGroups: NavGroup[] = [
+  {
+    key: 'purchases',
+    icon: <ShoppingCart className="h-5 w-5" />,
+    label: 'Compras',
+    roles: ['super_admin', 'branch_admin'],
+    permissions: [
+      'purchases.suppliers:read',
+      'purchases.purchase_orders:read',
+      'purchases.purchase_receipts:read',
+    ],
+    items: [
+      { to: '/suppliers', icon: <Truck className="h-4 w-4" />, label: 'Proveedores', roles: ['super_admin', 'branch_admin'], permissions: ['purchases.suppliers:read'] },
+      { to: '/purchases/orders', icon: <ShoppingCart className="h-4 w-4" />, label: 'Órdenes', roles: ['super_admin', 'branch_admin'], permissions: ['purchases.purchase_orders:read'] },
+      { to: '/purchases/receipts', icon: <PackageCheck className="h-4 w-4" />, label: 'Recepciones', roles: ['super_admin', 'branch_admin'], permissions: ['purchases.purchase_receipts:read'] },
+    ],
+  },
+  {
+    key: 'catalog',
+    icon: <Package className="h-5 w-5" />,
+    label: 'Catálogo',
+    roles: ['super_admin', 'branch_admin'],
+    permissions: [
+      'catalog.products:read',
+      'catalog.categories:read',
+      'catalog.brands:read',
+      'catalog.units:read',
+    ],
+    items: [
+      { to: '/catalog/products', icon: <Package className="h-4 w-4" />, label: 'Productos', roles: ['super_admin', 'branch_admin'], permissions: ['catalog.products:read'] },
+      { to: '/catalog/categories', icon: <FolderTree className="h-4 w-4" />, label: 'Categorías', roles: ['super_admin', 'branch_admin'], permissions: ['catalog.categories:read'] },
+      { to: '/catalog/brands', icon: <Tags className="h-4 w-4" />, label: 'Marcas', roles: ['super_admin', 'branch_admin'], permissions: ['catalog.brands:read'] },
+      { to: '/catalog/units', icon: <Ruler className="h-4 w-4" />, label: 'Unidades', roles: ['super_admin', 'branch_admin'], permissions: ['catalog.units:read'] },
+    ],
+  },
+  {
+    key: 'security',
+    icon: <ShieldCheck className="h-5 w-5" />,
+    label: 'Seguridad',
+    roles: ['super_admin'],
+    permissions: ['security.users:read', 'security.profiles:read'],
+    items: [
+      { to: '/security/users', icon: <Users className="h-4 w-4" />, label: 'Usuarios', roles: ['super_admin'], permissions: ['security.users:read'] },
+      { to: '/security/profiles', icon: <ShieldCheck className="h-4 w-4" />, label: 'Perfiles', roles: ['super_admin'], permissions: ['security.profiles:read'] },
+    ],
+  },
   {
     key: 'company',
     icon: <Building2 className="h-5 w-5" />,
     label: 'Empresa',
     roles: ['super_admin'],
+    permissions: [
+      'company.branches:read',
+      'company.warehouses:read',
+      'company.locations:read',
+    ],
     items: [
-      { to: '/company/branches', icon: <Store className="h-4 w-4" />, label: 'Sucursales', roles: ['super_admin'] },
-      { to: '/company/warehouses', icon: <Warehouse className="h-4 w-4" />, label: 'Almacenes', roles: ['super_admin'] },
-      { to: '/company/locations', icon: <MapPin className="h-4 w-4" />, label: 'Ubicaciones', roles: ['super_admin'] },
+      { to: '/company/branches', icon: <Store className="h-4 w-4" />, label: 'Sucursales', roles: ['super_admin'], permissions: ['company.branches:read'] },
+      { to: '/company/warehouses', icon: <Warehouse className="h-4 w-4" />, label: 'Almacenes', roles: ['super_admin'], permissions: ['company.warehouses:read'] },
+      { to: '/company/locations', icon: <MapPin className="h-4 w-4" />, label: 'Ubicaciones', roles: ['super_admin'], permissions: ['company.locations:read'] },
     ],
   },
 ];
 
 const navItemsAfterGroups: NavItem[] = [
-  { to: '/inventory', icon: <ArrowLeftRight className="h-5 w-5" />, label: 'Inventario', roles: ['super_admin', 'branch_admin'] },
+  { to: '/inventory', icon: <ArrowLeftRight className="h-5 w-5" />, label: 'Inventario', roles: ['super_admin', 'branch_admin'], permissions: ['inventory.movements:read'] },
   { to: '/metrics', icon: <BarChart3 className="h-5 w-5" />, label: 'Métricas', roles: ['super_admin', 'branch_admin', 'viewer'] },
 ];
 
@@ -90,24 +154,32 @@ export function Sidebar() {
   const user = useAuthStore((state) => state.user);
   const location = useLocation();
 
+  const { canWithFallback } = usePermissions();
+
   // El grupo "Empresa" arranca expandido si la ruta actual es de su módulo
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    // Proveedores vive bajo el grupo Compras aunque su ruta sea /suppliers
+    purchases:
+      location.pathname.startsWith('/purchases') || location.pathname.startsWith('/suppliers'),
+    catalog: location.pathname.startsWith('/catalog'),
     company: location.pathname.startsWith('/company'),
+    security: location.pathname.startsWith('/security'),
   });
 
   const toggleGroup = (key: string) => {
     setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const visibleItems = navItems.filter(
-    (item) => user && item.roles.includes(user.role),
-  );
-  const visibleGroups = navGroups.filter(
-    (group) => user && group.roles.includes(user.role),
-  );
-  const visibleItemsAfter = navItemsAfterGroups.filter(
-    (item) => user && item.roles.includes(user.role),
-  );
+  /** Rol como respaldo y, si el backend mandó permisos, la clave del permiso. */
+  const isAllowed = (entry: NavItem | NavGroup) => {
+    if (!user || !entry.roles.includes(user.role)) return false;
+    if (!entry.permissions) return true;
+    return canWithFallback(entry.permissions, entry.roles);
+  };
+
+  const visibleItems = navItems.filter(isAllowed);
+  const visibleGroups = navGroups.filter(isAllowed);
+  const visibleItemsAfter = navItemsAfterGroups.filter(isAllowed);
 
   return (
     <aside
@@ -172,7 +244,7 @@ export function Sidebar() {
               {isExpanded && (
                 <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-2">
                   {group.items
-                    .filter((item) => user && item.roles.includes(user.role))
+                    .filter(isAllowed)
                     .map((item) => (
                       <NavLink
                         key={item.to}

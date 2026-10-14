@@ -9,6 +9,7 @@ import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog';
 import { SearchInput } from '@/presentation/components/shared/SearchInput';
 import { EmptyState } from '@/presentation/components/shared/EmptyState';
 import { useSuppliers } from '@/application/hooks/useSuppliers';
+import { usePermissions } from '@/application/hooks/usePermissions';
 import { toast } from '@/application/stores/useToastStore';
 import type { Supplier } from '@/domain/models';
 
@@ -27,6 +28,11 @@ export function SupplierListPage() {
     { type: 'activate' | 'deactivate'; supplier: Supplier } | null
   >(null);
   const [isActionLoading, setIsActionLoading] = React.useState(false);
+
+  const { can } = usePermissions();
+  const canCreate = can('purchases.suppliers:create');
+  const canUpdate = can('purchases.suppliers:update');
+  const canSetActive = can('purchases.suppliers:deactivate');
 
   React.useEffect(() => {
     fetchSuppliers({ search: search || undefined });
@@ -53,11 +59,6 @@ export function SupplierListPage() {
   };
 
   const columns: TableColumn<Supplier>[] = [
-    {
-      key: 'code',
-      header: 'Código',
-      cell: (s) => <span className="font-mono text-xs text-text-tertiary">{s.code}</span>,
-    },
     {
       key: 'name',
       header: 'Nombre',
@@ -94,26 +95,30 @@ export function SupplierListPage() {
       align: 'right',
       cell: (s) => (
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={() => navigate(`/suppliers/${s.id}/edit`)}
-            className="p-2 rounded-lg text-text-muted hover:text-brand-600 hover:bg-surface-tertiary transition-colors"
-            title="Editar proveedor"
-          >
-            <Pencil className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() =>
-              setPendingAction({ type: s.is_active ? 'deactivate' : 'activate', supplier: s })
-            }
-            className={`p-2 rounded-lg transition-colors ${
-              s.is_active
-                ? 'text-text-muted hover:text-semantic-danger-600 hover:bg-surface-tertiary'
-                : 'text-text-muted hover:text-semantic-success-600 hover:bg-surface-tertiary'
-            }`}
-            title={s.is_active ? 'Desactivar proveedor' : 'Activar proveedor'}
-          >
-            <Power className="h-4 w-4" />
-          </button>
+          {canUpdate && (
+            <button
+              onClick={() => navigate(`/suppliers/${s.id}/edit`)}
+              className="p-2 rounded-lg text-text-muted hover:text-brand-600 hover:bg-surface-tertiary transition-colors"
+              title="Editar proveedor"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          )}
+          {canSetActive && (
+            <button
+              onClick={() =>
+                setPendingAction({ type: s.is_active ? 'deactivate' : 'activate', supplier: s })
+              }
+              className={`p-2 rounded-lg transition-colors ${
+                s.is_active
+                  ? 'text-text-muted hover:text-semantic-danger-600 hover:bg-surface-tertiary'
+                  : 'text-text-muted hover:text-semantic-success-600 hover:bg-surface-tertiary'
+              }`}
+              title={s.is_active ? 'Desactivar proveedor' : 'Activar proveedor'}
+            >
+              <Power className="h-4 w-4" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -123,12 +128,14 @@ export function SupplierListPage() {
     <div>
       <CardHeader>
         <CardTitle>Proveedores</CardTitle>
-        <Button
-          leftIcon={<Plus className="h-4 w-4" />}
-          onClick={() => navigate('/suppliers/new')}
-        >
-          Nuevo Proveedor
-        </Button>
+        {canCreate && (
+          <Button
+            leftIcon={<Plus className="h-4 w-4" />}
+            onClick={() => navigate('/suppliers/new')}
+          >
+            Nuevo Proveedor
+          </Button>
+        )}
       </CardHeader>
 
       {error && (
@@ -142,7 +149,7 @@ export function SupplierListPage() {
           <SearchInput
             value={search}
             onChange={setSearch}
-            placeholder="Buscar por nombre o código..."
+            placeholder="Buscar por nombre..."
           />
         </div>
 
@@ -161,7 +168,7 @@ export function SupplierListPage() {
                   : 'Registra tu primer proveedor para poder crear órdenes de compra.'
               }
               action={
-                !search ? (
+                !search && canCreate ? (
                   <Button onClick={() => navigate('/suppliers/new')}>
                     + Nuevo Proveedor
                   </Button>

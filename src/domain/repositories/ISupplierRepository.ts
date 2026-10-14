@@ -6,8 +6,6 @@ import type { SearchParams } from '@/shared/types/common';
  * El backend combina los filtros enviados con AND.
  */
 export interface SupplierQueryParams extends SearchParams {
-  /** Filtro exacto por código (supplier_code_text). */
-  code?: string;
   /** Filtro exacto por identificador fiscal (supplier_tax_id_text). */
   taxId?: string;
   /** Filtro por estado (supplier_is_active_bl). */

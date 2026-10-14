@@ -1,5 +1,5 @@
 import type { IAuthRepository } from '@/domain/repositories';
-import type { User, AuthCredentials, AuthSession } from '@/domain/models';
+import type { User, AuthCredentials, AuthSession, PermissionMap } from '@/domain/models';
 import { api, setAccessToken, getAccessToken, ensureFreshSession } from './client';
 import { tokenStorage } from './tokenStorage';
 import { toAuthSession, toUser, type ApiPublicUser, type ApiProfileRef, type ApiLoginResponse } from './auth.mapper';
@@ -11,7 +11,7 @@ import { toAuthSession, toUser, type ApiPublicUser, type ApiProfileRef, type Api
 type ApiSessionResponse = ApiPublicUser & {
   profiles: ApiProfileRef[];
   branches: string[];
-  permissions: Record<string, Record<string, string[]>>;
+  permissions: PermissionMap;
 };
 
 /**
@@ -109,6 +109,7 @@ export class ApiAuthRepository implements IAuthRepository {
         access_token: getAccessToken() ?? '',
         refresh_token: tokenStorage.getRefreshToken() ?? '',
         expires_at: Date.now() + 5 * 60 * 1000,
+        permissions: data.permissions ?? {},
       };
     } catch {
       return null;

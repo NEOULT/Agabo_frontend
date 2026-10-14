@@ -7,7 +7,6 @@ import type { Supplier } from '@/domain/models';
 export interface ApiSupplier {
   supplier_uuid: string;
   company_uuid: string;
-  supplier_code_text: string;
   supplier_name_text: string;
   supplier_tax_id_text: string | null;
   supplier_email_text: string | null;
@@ -28,7 +27,6 @@ export function toSupplier(apiSupplier: ApiSupplier): Supplier {
   return {
     id: apiSupplier.supplier_uuid,
     company_id: apiSupplier.company_uuid,
-    code: apiSupplier.supplier_code_text,
     name: apiSupplier.supplier_name_text,
     tax_id: apiSupplier.supplier_tax_id_text ?? undefined,
     email: apiSupplier.supplier_email_text ?? undefined,
