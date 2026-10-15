@@ -8,7 +8,6 @@ import type { Branch } from '@/domain/models/branch';
 import type { Warehouse } from '@/domain/models/warehouse';
 import type { Location } from '@/domain/models/location';
 import type { User } from '@/domain/models/user';
-import type { Movement } from '@/domain/models/movement';
 import type { PurchaseOrder } from '@/domain/models/purchase-order';
 import type { PurchaseReceipt } from '@/domain/models/purchase-receipt';
 
@@ -452,8 +451,6 @@ export const MOCK_USERS: User[] = [
     branches: ['branch-002'],
   },
 ];
-
-export const MOCK_MOVEMENTS: Movement[] = [];
 
 // 🧾 Órdenes de compra (purchases.purchase_order)
 // La orden 002 ya está recibida: tiene recepción y estado 'received'.

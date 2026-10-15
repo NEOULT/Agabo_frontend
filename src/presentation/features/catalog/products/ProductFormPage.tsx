@@ -1,12 +1,11 @@
 import React from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/presentation/components/ui/Card';
 import { Input } from '@/presentation/components/ui/Input';
 import { Select } from '@/presentation/components/ui/Select';
 import { Textarea } from '@/presentation/components/ui/Textarea';
-import { LoadingSpinner } from '@/presentation/components/shared/LoadingSpinner';
 import { useProducts } from '@/application/hooks/useProducts';
 import { useCategories } from '@/application/hooks/useCategories';
 import { useBrands } from '@/application/hooks/useBrands';
@@ -33,28 +32,24 @@ const emptyForm: FormValues = {
 type FormErrors = Partial<Record<keyof FormValues, string>>;
 
 /**
- * Formulario de producto (crear / editar).
+ * Alta de producto (RF-CAT-001).
  *
- * - Crear: obligatorios nombre y unidad base. El backend genera
- *   automáticamente la presentación base sobre esa unidad.
- * - Editar: solo nombre, descripción, categoría y marca (RF-CAT-015); la
- *   unidad base NO es editable.
+ * Solo crea: obligatorios nombre y unidad base (el backend genera la
+ * presentación base sobre esa unidad). La edición posterior —nombre,
+ * descripción, categoría y marca— se hace en la pantalla de detalle del
+ * producto, sin salir de ella (RF-CAT-015); la unidad base no es editable.
  */
 export function ProductFormPage() {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
-  const isEdit = Boolean(id);
 
-  const { getProduct, createProduct, updateProduct } = useProducts();
+  const { createProduct } = useProducts();
   const { categories, fetchCategories } = useCategories();
   const { brands, fetchBrands } = useBrands();
   const { units, fetchUnits } = useUnits();
 
   const [values, setValues] = React.useState<FormValues>(emptyForm);
   const [errors, setErrors] = React.useState<FormErrors>({});
-  const [isLoading, setIsLoading] = React.useState(isEdit);
   const [isSaving, setIsSaving] = React.useState(false);
-  const [loadError, setLoadError] = React.useState<string | null>(null);
 
   // Catálogos de apoyo: solo activos para poder asignarlos
   React.useEffect(() => {
@@ -63,47 +58,12 @@ export function ProductFormPage() {
     fetchUnits({ isActive: true });
   }, [fetchCategories, fetchBrands, fetchUnits]);
 
-  React.useEffect(() => {
-    if (!isEdit || !id) return;
-
-    let cancelled = false;
-    setIsLoading(true);
-
-    getProduct(id)
-      .then((product) => {
-        if (cancelled) return;
-        if (!product) {
-          setLoadError('No se encontró el producto solicitado.');
-          return;
-        }
-        setValues({
-          name: product.name,
-          description: product.description ?? '',
-          category_id: product.category_id ?? '',
-          brand_id: product.brand_id ?? '',
-          base_unit_id: product.base_unit_id,
-        });
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : 'Error al cargar el producto.');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
+  const handleChange =
+    (field: keyof FormValues) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      setValues((prev) => ({ ...prev, [field]: e.target.value }));
+      if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
     };
-  }, [id, isEdit, getProduct]);
-
-  const handleChange = (field: keyof FormValues) => (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
-  ) => {
-    setValues((prev) => ({ ...prev, [field]: e.target.value }));
-    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,7 +76,7 @@ export function ProductFormPage() {
     ]);
     if (nameError) validationErrors.name = nameError;
 
-    if (!isEdit && !values.base_unit_id) {
+    if (!values.base_unit_id) {
       validationErrors.base_unit_id = 'Selecciona la unidad base.';
     }
     if (values.description.trim().length > 500) {
@@ -128,27 +88,16 @@ export function ProductFormPage() {
 
     setIsSaving(true);
     try {
-      if (isEdit && id) {
-        await updateProduct(id, {
-          name: values.name.trim(),
-          description: values.description.trim() || null,
-          category_id: values.category_id || null,
-          brand_id: values.brand_id || null,
-        });
-        toast.success(`El producto "${values.name.trim()}" fue actualizado.`);
-        navigate(`/catalog/products/${id}`);
-      } else {
-        const product = await createProduct({
-          name: values.name.trim(),
-          base_unit_id: values.base_unit_id,
-          description: values.description.trim() || undefined,
-          category_id: values.category_id || undefined,
-          brand_id: values.brand_id || undefined,
-        });
-        toast.success(`El producto "${values.name.trim()}" fue creado.`);
-        // Al detalle para que agregue códigos y presentaciones
-        navigate(`/catalog/products/${product.id}`);
-      }
+      const product = await createProduct({
+        name: values.name.trim(),
+        base_unit_id: values.base_unit_id,
+        description: values.description.trim() || undefined,
+        category_id: values.category_id || undefined,
+        brand_id: values.brand_id || undefined,
+      });
+      toast.success(`El producto "${values.name.trim()}" fue creado.`);
+      // Al detalle para que agregue códigos y presentaciones
+      navigate(`/catalog/products/${product.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo guardar el producto.');
     } finally {
@@ -156,31 +105,16 @@ export function ProductFormPage() {
     }
   };
 
-  if (isLoading) {
-    return <LoadingSpinner label="Cargando producto..." />;
-  }
-
-  if (loadError) {
-    return (
-      <Card>
-        <p className="text-sm text-semantic-danger-600">{loadError}</p>
-        <Button className="mt-4" variant="secondary" onClick={() => navigate('/catalog/products')}>
-          Volver a Productos
-        </Button>
-      </Card>
-    );
-  }
-
-  const noUnits = !isEdit && units.length === 0;
+  const noUnits = units.length === 0;
 
   return (
     <div className="max-w-xl">
       <CardHeader>
-        <CardTitle>{isEdit ? 'Editar Producto' : 'Nuevo Producto'}</CardTitle>
+        <CardTitle>Nuevo Producto</CardTitle>
         <Button
           variant="ghost"
           leftIcon={<ArrowLeft className="h-4 w-4" />}
-          onClick={() => navigate(isEdit && id ? `/catalog/products/${id}` : '/catalog/products')}
+          onClick={() => navigate('/catalog/products')}
         >
           Volver
         </Button>
@@ -238,40 +172,31 @@ export function ProductFormPage() {
             helperText="Opcional."
           />
 
-          {isEdit ? (
-            <Input
-              label="Unidad base"
-              value={units.find((u) => u.id === values.base_unit_id)?.name ?? '—'}
-              disabled
-              helperText="La unidad base no se puede cambiar después de crear el producto."
-            />
-          ) : (
-            <Select
-              label="Unidad base"
-              value={values.base_unit_id}
-              onChange={handleChange('base_unit_id')}
-              options={units.map((u) => ({
-                value: u.id,
-                label: u.abbreviation ? `${u.name} (${u.abbreviation})` : u.name,
-              }))}
-              placeholder="Selecciona la unidad base"
-              error={errors.base_unit_id}
-              helperText="Determina la medida de las existencias. No se puede cambiar luego."
-              required
-            />
-          )}
+          <Select
+            label="Unidad base"
+            value={values.base_unit_id}
+            onChange={handleChange('base_unit_id')}
+            options={units.map((u) => ({
+              value: u.id,
+              label: u.abbreviation ? `${u.name} (${u.abbreviation})` : u.name,
+            }))}
+            placeholder="Selecciona la unidad base"
+            error={errors.base_unit_id}
+            helperText="Determina la medida de las existencias. No se puede cambiar luego."
+            required
+          />
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <Button
               type="button"
               variant="secondary"
-              onClick={() => navigate(isEdit && id ? `/catalog/products/${id}` : '/catalog/products')}
+              onClick={() => navigate('/catalog/products')}
               disabled={isSaving}
             >
               Cancelar
             </Button>
             <Button type="submit" isLoading={isSaving} disabled={noUnits}>
-              {isEdit ? 'Guardar cambios' : 'Crear producto'}
+              Crear producto
             </Button>
           </div>
         </form>

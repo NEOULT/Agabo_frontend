@@ -8,13 +8,58 @@
   }
 
   body {
-    @apply min-h-screen;
+    @apply min-h-screen bg-surface-secondary text-text-primary antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Selección de texto con el color de marca */
+  ::selection {
+    @apply bg-brand-200 text-brand-950;
   }
 }
 
 @layer components {
+  /*
+   * Scrollbar fina y reutilizable (sidebar, contenedores con scroll).
+   * `scrollbar-width/color` cubre Firefox; los pseudo-elementos, Chromium/WebKit.
+   */
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: theme('colors.border.input') transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: theme('colors.border.input');
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: theme('colors.text.muted');
+  }
+}
+
+/*
+ * Accesibilidad: si el usuario pide menos movimiento, se desactivan animaciones
+ * y transiciones. Evita mareos y ahorra CPU en equipos lentos.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

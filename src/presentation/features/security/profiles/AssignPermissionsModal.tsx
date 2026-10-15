@@ -6,7 +6,6 @@ import {
   ChevronRight,
   ClipboardList,
   Layers,
-  Lock,
   Package,
   Settings,
   ShieldCheck,

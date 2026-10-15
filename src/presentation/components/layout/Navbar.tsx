@@ -8,7 +8,7 @@ export function Navbar() {
   const { branches, activeBranch, setActiveBranch } = useBranchStore();
 
   return (
-    <header className="h-16 bg-header-bg flex items-center justify-between px-6 shadow-sm">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between bg-header-bg px-4 shadow-soft sm:px-6">
       {/* Left side */}
       <div className="flex items-center gap-4">
         <h2 className="text-lg font-semibold text-header-text">

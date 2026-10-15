@@ -21,8 +21,10 @@ export function useLocations() {
     try {
       const result = await locationRepo.getAll(params);
       setLocations(result.data);
+      return result.data;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar ubicaciones');
+      return [];
     } finally {
       setIsLoading(false);
     }

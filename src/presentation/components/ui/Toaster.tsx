@@ -21,7 +21,7 @@ function ToastItem({ toast }: { toast: Toast }) {
 
   return (
     <div
-      className={`flex items-center gap-3 w-full max-w-sm p-4 bg-surface-primary border-l-4 rounded-lg shadow-lg ${typeStyles[toast.type].container}`}
+      className={`flex w-full max-w-sm animate-slide-in-right items-center gap-3 rounded-lg border-l-4 bg-surface-primary p-4 shadow-elevated ${typeStyles[toast.type].container}`}
       role="alert"
     >
       {typeStyles[toast.type].icon}

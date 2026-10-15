@@ -5,8 +5,14 @@ import type {
   ICategoryRepository,
   IBrandRepository,
   ISupplierRepository,
+  IPriceListRepository,
+  IPriceProductRepository,
   IPurchaseOrderRepository,
   IPurchaseReceiptRepository,
+  ICustomerRepository,
+  IPaymentMethodRepository,
+  ISaleRepository,
+  IPaymentRepository,
   IBranchRepository,
   IWarehouseRepository,
   ILocationRepository,
@@ -15,16 +21,23 @@ import type {
   IUserRepository,
   IProfileRepository,
   IAuthorizationCatalogRepository,
+  IMovementTypeRepository,
+  IStockRepository,
 } from '@/domain/repositories';
 
-import { MockMovementRepository } from '@/infrastructure/mocks/repositories/MockMovementRepository';
 import { ApiAuthRepository } from '@/infrastructure/api/ApiAuthRepository';
 import { ApiBranchRepository } from '@/infrastructure/api/ApiBranchRepository';
 import { ApiWarehouseRepository } from '@/infrastructure/api/ApiWarehouseRepository';
 import { ApiLocationRepository } from '@/infrastructure/api/ApiLocationRepository';
 import { ApiSupplierRepository } from '@/infrastructure/api/ApiSupplierRepository';
+import { ApiPriceListRepository } from '@/infrastructure/api/ApiPriceListRepository';
+import { ApiPriceProductRepository } from '@/infrastructure/api/ApiPriceProductRepository';
 import { ApiPurchaseOrderRepository } from '@/infrastructure/api/ApiPurchaseOrderRepository';
 import { ApiPurchaseReceiptRepository } from '@/infrastructure/api/ApiPurchaseReceiptRepository';
+import { ApiCustomerRepository } from '@/infrastructure/api/ApiCustomerRepository';
+import { ApiPaymentMethodRepository } from '@/infrastructure/api/ApiPaymentMethodRepository';
+import { ApiSaleRepository } from '@/infrastructure/api/ApiSaleRepository';
+import { ApiPaymentRepository } from '@/infrastructure/api/ApiPaymentRepository';
 import { ApiProductRepository } from '@/infrastructure/api/ApiProductRepository';
 import { ApiUnitRepository } from '@/infrastructure/api/ApiUnitRepository';
 import { ApiCategoryRepository } from '@/infrastructure/api/ApiCategoryRepository';
@@ -32,6 +45,9 @@ import { ApiBrandRepository } from '@/infrastructure/api/ApiBrandRepository';
 import { ApiUserRepository } from '@/infrastructure/api/ApiUserRepository';
 import { ApiProfileRepository } from '@/infrastructure/api/ApiProfileRepository';
 import { ApiAuthorizationCatalogRepository } from '@/infrastructure/api/ApiAuthorizationCatalogRepository';
+import { ApiMovementRepository } from '@/infrastructure/api/ApiMovementRepository';
+import { ApiMovementTypeRepository } from '@/infrastructure/api/ApiMovementTypeRepository';
+import { ApiStockRepository } from '@/infrastructure/api/ApiStockRepository';
 
 export interface Repositories {
   products: IProductRepository;
@@ -39,12 +55,20 @@ export interface Repositories {
   categories: ICategoryRepository;
   brands: IBrandRepository;
   suppliers: ISupplierRepository;
+  priceLists: IPriceListRepository;
+  priceProducts: IPriceProductRepository;
   purchaseOrders: IPurchaseOrderRepository;
   purchaseReceipts: IPurchaseReceiptRepository;
+  customers: ICustomerRepository;
+  paymentMethods: IPaymentMethodRepository;
+  sales: ISaleRepository;
+  payments: IPaymentRepository;
   branches: IBranchRepository;
   warehouses: IWarehouseRepository;
   locations: ILocationRepository;
   movements: IMovementRepository;
+  movementTypes: IMovementTypeRepository;
+  stocks: IStockRepository;
   auth: IAuthRepository;
   users: IUserRepository;
   profiles: IProfileRepository;
@@ -52,9 +76,10 @@ export interface Repositories {
 }
 
 /**
- * Auth, company (branches/warehouses/locations), purchases.suppliers y el
- * catálogo (products/units/categories/brands) ya consumen el backend Express
- * real. Solo movements sigue con Mock hasta conectar el módulo inventory.
+ * Auth, company (branches/warehouses/locations), purchases
+ * (suppliers/orders/receipts), sales (customers/payment_methods/sales/payments),
+ * el catálogo (products/units/categories/brands) y el inventario
+ * (movements/movement types/stocks) consumen el backend Express real.
  */
 const repositories: Repositories = {
   products: new ApiProductRepository(),
@@ -62,12 +87,20 @@ const repositories: Repositories = {
   categories: new ApiCategoryRepository(),
   brands: new ApiBrandRepository(),
   suppliers: new ApiSupplierRepository(),
+  priceLists: new ApiPriceListRepository(),
+  priceProducts: new ApiPriceProductRepository(),
   purchaseOrders: new ApiPurchaseOrderRepository(),
   purchaseReceipts: new ApiPurchaseReceiptRepository(),
+  customers: new ApiCustomerRepository(),
+  paymentMethods: new ApiPaymentMethodRepository(),
+  sales: new ApiSaleRepository(),
+  payments: new ApiPaymentRepository(),
   branches: new ApiBranchRepository(),
   warehouses: new ApiWarehouseRepository(),
   locations: new ApiLocationRepository(),
-  movements: new MockMovementRepository(),
+  movements: new ApiMovementRepository(),
+  movementTypes: new ApiMovementTypeRepository(),
+  stocks: new ApiStockRepository(),
   auth: new ApiAuthRepository(),
   users: new ApiUserRepository(),
   profiles: new ApiProfileRepository(),

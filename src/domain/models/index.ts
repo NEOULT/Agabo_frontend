@@ -28,6 +28,35 @@ export type {
 export type { PurchaseReceipt, CreatePurchaseReceiptDTO } from './purchase-receipt';
 
 export type {
+  PriceList,
+  CreatePriceListDTO,
+  UpdatePriceListDTO,
+} from './price-list';
+export type {
+  PriceProduct,
+  CreatePriceProductDTO,
+  UpdatePriceProductDTO,
+} from './price-product';
+
+export type { Customer, CreateCustomerDTO, UpdateCustomerDTO } from './customer';
+
+export type {
+  PaymentMethod,
+  CreatePaymentMethodDTO,
+  UpdatePaymentMethodDTO,
+} from './payment-method';
+
+export type {
+  Sale,
+  SalePaymentStatus,
+  SaleDetail,
+  SalePayment,
+  CreateSaleDTO,
+  CreateSaleDetailDTO,
+  CreatePaymentDTO,
+} from './sale';
+
+export type {
   Branch,
   CreateBranchDTO,
   UpdateBranchDTO,
@@ -48,8 +77,20 @@ export type {
 export type {
   Movement,
   MovementType,
+  MovementPurpose,
+  MovementDetail,
   CreateMovementDTO,
+  CreateMovementDetailDTO,
+  CreateMovementTypeDTO,
+  UpdateMovementTypeDTO,
 } from './movement';
+
+export type {
+  Stock,
+  StockLot,
+  CreateStockDTO,
+  UpdateStockDTO,
+} from './stock';
 
 export type {
   User,

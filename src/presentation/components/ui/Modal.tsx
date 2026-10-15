@@ -64,14 +64,16 @@ export function Modal({
       aria-labelledby="modal-title"
     >
       {/* Overlay */}
+      {/* Overlay sin `backdrop-blur`: el filtro de desenfoque es costoso en
+          pantalla completa. Un fondo translúcido se ve igual y no da tirones. */}
       <div
-        className="absolute inset-0 bg-text-primary/50 backdrop-blur-sm"
+        className="absolute inset-0 animate-fade-in bg-text-primary/40"
         onClick={disableBackdropClose ? undefined : onClose}
       />
 
       {/* Contenido */}
       <div
-        className={`relative w-full ${sizeStyles[size]} bg-surface-primary rounded-xl border border-border-default shadow-xl animate-in`}
+        className={`relative w-full ${sizeStyles[size]} animate-scale-in bg-surface-primary rounded-xl border border-border-default shadow-elevated`}
       >
         {/* Cabecera */}
         <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-border-subtle">

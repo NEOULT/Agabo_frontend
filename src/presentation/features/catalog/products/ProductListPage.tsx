@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Package, Pencil, Power, Eye } from 'lucide-react';
+import { Plus, Package, Power, Eye } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/presentation/components/ui/Card';
 import { Badge } from '@/presentation/components/ui/Badge';
@@ -29,7 +29,6 @@ export function ProductListPage() {
   const { can } = usePermissions();
 
   const canCreate = can('catalog.products:create');
-  const canUpdate = can('catalog.products:update');
   const canSetActive = can('catalog.products:deactivate');
 
   const [search, setSearch] = React.useState('');
@@ -132,15 +131,6 @@ export function ProductListPage() {
           >
             <Eye className="h-4 w-4" />
           </button>
-          {canUpdate && (
-            <button
-              onClick={() => navigate(`/catalog/products/${p.id}/edit`)}
-              className="p-2 rounded-lg text-text-muted hover:text-brand-600 hover:bg-surface-tertiary transition-colors"
-              title="Editar producto"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-          )}
           {canSetActive && (
             <button
               onClick={() => setPendingAction({ type: p.is_active ? 'deactivate' : 'activate', product: p })}

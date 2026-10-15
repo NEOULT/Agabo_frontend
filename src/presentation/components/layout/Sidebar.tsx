@@ -6,6 +6,7 @@ import {
   FolderTree,
   Tags,
   Ruler,
+  DollarSign,
   Truck,
   Building2,
   Store,
@@ -15,6 +16,9 @@ import {
   BarChart3,
   ShoppingCart,
   PackageCheck,
+  Receipt,
+  UserRound,
+  CreditCard,
   ShieldCheck,
   Users,
   ChevronLeft,
@@ -40,6 +44,12 @@ interface NavItem {
   label: string;
   roles: UserRole[];
   permissions?: PermissionKey[];
+  /**
+   * Marca la ruta como coincidencia exacta. Necesario mientras una ruta sea
+   * prefijo de otra del mismo grupo (ej: Punto de venta `/sales` frente a
+   * Historial `/sales/history`).
+   */
+  end?: boolean;
 }
 
 /**
@@ -77,6 +87,23 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    key: 'sales',
+    icon: <Receipt className="h-5 w-5" />,
+    label: 'Ventas',
+    roles: ['super_admin', 'branch_admin'],
+    permissions: [
+      'sales.sales:read',
+      'sales.customers:read',
+      'sales.payment_methods:read',
+    ],
+    items: [
+      { to: '/sales', end: true, icon: <ShoppingCart className="h-4 w-4" />, label: 'Punto de venta', roles: ['super_admin', 'branch_admin'], permissions: ['sales.sales:read'] },
+      { to: '/sales/history', icon: <Receipt className="h-4 w-4" />, label: 'Historial', roles: ['super_admin', 'branch_admin'], permissions: ['sales.sales:read'] },
+      { to: '/sales/customers', icon: <UserRound className="h-4 w-4" />, label: 'Clientes', roles: ['super_admin', 'branch_admin'], permissions: ['sales.customers:read'] },
+      { to: '/sales/payment-methods', icon: <CreditCard className="h-4 w-4" />, label: 'Métodos de pago', roles: ['super_admin', 'branch_admin'], permissions: ['sales.payment_methods:read'] },
+    ],
+  },
+  {
     key: 'catalog',
     icon: <Package className="h-5 w-5" />,
     label: 'Catálogo',
@@ -86,12 +113,14 @@ const navGroups: NavGroup[] = [
       'catalog.categories:read',
       'catalog.brands:read',
       'catalog.units:read',
+      'catalog.price_lists:read',
     ],
     items: [
       { to: '/catalog/products', icon: <Package className="h-4 w-4" />, label: 'Productos', roles: ['super_admin', 'branch_admin'], permissions: ['catalog.products:read'] },
       { to: '/catalog/categories', icon: <FolderTree className="h-4 w-4" />, label: 'Categorías', roles: ['super_admin', 'branch_admin'], permissions: ['catalog.categories:read'] },
       { to: '/catalog/brands', icon: <Tags className="h-4 w-4" />, label: 'Marcas', roles: ['super_admin', 'branch_admin'], permissions: ['catalog.brands:read'] },
       { to: '/catalog/units', icon: <Ruler className="h-4 w-4" />, label: 'Unidades', roles: ['super_admin', 'branch_admin'], permissions: ['catalog.units:read'] },
+      { to: '/catalog/price-lists', icon: <DollarSign className="h-4 w-4" />, label: 'Precios', roles: ['super_admin', 'branch_admin'], permissions: ['catalog.price_lists:read'] },
     ],
   },
   {
@@ -121,10 +150,25 @@ const navGroups: NavGroup[] = [
       { to: '/company/locations', icon: <MapPin className="h-4 w-4" />, label: 'Ubicaciones', roles: ['super_admin'], permissions: ['company.locations:read'] },
     ],
   },
+  {
+    key: 'inventory',
+    icon: <ArrowLeftRight className="h-5 w-5" />,
+    label: 'Inventario',
+    roles: ['super_admin', 'branch_admin'],
+    permissions: [
+      'inventory.movements:read',
+      'inventory.movement_types:read',
+      'inventory.stocks:read',
+    ],
+    items: [
+      { to: '/inventory', end: true, icon: <ArrowLeftRight className="h-4 w-4" />, label: 'Movimientos', roles: ['super_admin', 'branch_admin'], permissions: ['inventory.movements:read'] },
+      { to: '/inventory/movement-types', icon: <Tags className="h-4 w-4" />, label: 'Tipos de movimiento', roles: ['super_admin', 'branch_admin'], permissions: ['inventory.movement_types:read'] },
+      { to: '/inventory/stocks', icon: <Package className="h-4 w-4" />, label: 'Existencias', roles: ['super_admin', 'branch_admin'], permissions: ['inventory.stocks:read'] },
+    ],
+  },
 ];
 
 const navItemsAfterGroups: NavItem[] = [
-  { to: '/inventory', icon: <ArrowLeftRight className="h-5 w-5" />, label: 'Inventario', roles: ['super_admin', 'branch_admin'], permissions: ['inventory.movements:read'] },
   { to: '/metrics', icon: <BarChart3 className="h-5 w-5" />, label: 'Métricas', roles: ['super_admin', 'branch_admin', 'viewer'] },
 ];
 
@@ -132,7 +176,7 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
   return (
     <NavLink
       to={item.to}
-      end={item.to === '/'}
+      end={item.end ?? item.to === '/'}
       className={({ isActive }) =>
         `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150
         ${isActive
@@ -161,9 +205,11 @@ export function Sidebar() {
     // Proveedores vive bajo el grupo Compras aunque su ruta sea /suppliers
     purchases:
       location.pathname.startsWith('/purchases') || location.pathname.startsWith('/suppliers'),
+    sales: location.pathname.startsWith('/sales'),
     catalog: location.pathname.startsWith('/catalog'),
     company: location.pathname.startsWith('/company'),
     security: location.pathname.startsWith('/security'),
+    inventory: location.pathname.startsWith('/inventory'),
   });
 
   const toggleGroup = (key: string) => {
@@ -184,13 +230,13 @@ export function Sidebar() {
   return (
     <aside
       className={`
-        fixed left-0 top-0 z-40 h-screen bg-sidebar-bg border-r border-sidebar-border
-        transition-all duration-300 ease-in-out
+        fixed left-0 top-0 z-40 flex h-screen flex-col bg-sidebar-bg border-r border-sidebar-border
+        transition-[width] duration-300 ease-in-out
         ${sidebarOpen ? 'w-64' : 'w-16'}
       `}
     >
       {/* Logo */}
-      <div className="flex items-center h-16 px-4 border-b border-sidebar-border">
+      <div className="flex h-16 flex-shrink-0 items-center px-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-2xl flex-shrink-0">🏪</span>
           {sidebarOpen && (
@@ -201,8 +247,8 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="p-2 space-y-1">
+      {/* Navigation — con scroll propio cuando el menú supera la altura */}
+      <nav className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-2 space-y-1">
         {visibleItems.map((item) => (
           <NavItemLink key={item.to} item={item} collapsed={!sidebarOpen} />
         ))}
@@ -249,6 +295,7 @@ export function Sidebar() {
                       <NavLink
                         key={item.to}
                         to={item.to}
+                        end={item.end ?? item.to === '/'}
                         className={({ isActive }) =>
                           `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-150
                           ${isActive
