@@ -16,6 +16,7 @@ import type {
   IBranchRepository,
   IWarehouseRepository,
   ILocationRepository,
+  ICurrencyRepository,
   IMovementRepository,
   IAuthRepository,
   IUserRepository,
@@ -29,6 +30,7 @@ import { ApiAuthRepository } from '@/infrastructure/api/ApiAuthRepository';
 import { ApiBranchRepository } from '@/infrastructure/api/ApiBranchRepository';
 import { ApiWarehouseRepository } from '@/infrastructure/api/ApiWarehouseRepository';
 import { ApiLocationRepository } from '@/infrastructure/api/ApiLocationRepository';
+import { ApiCurrencyRepository } from '@/infrastructure/api/ApiCurrencyRepository';
 import { ApiSupplierRepository } from '@/infrastructure/api/ApiSupplierRepository';
 import { ApiPriceListRepository } from '@/infrastructure/api/ApiPriceListRepository';
 import { ApiPriceProductRepository } from '@/infrastructure/api/ApiPriceProductRepository';
@@ -66,6 +68,7 @@ export interface Repositories {
   branches: IBranchRepository;
   warehouses: IWarehouseRepository;
   locations: ILocationRepository;
+  currencies: ICurrencyRepository;
   movements: IMovementRepository;
   movementTypes: IMovementTypeRepository;
   stocks: IStockRepository;
@@ -98,6 +101,7 @@ const repositories: Repositories = {
   branches: new ApiBranchRepository(),
   warehouses: new ApiWarehouseRepository(),
   locations: new ApiLocationRepository(),
+  currencies: new ApiCurrencyRepository(),
   movements: new ApiMovementRepository(),
   movementTypes: new ApiMovementTypeRepository(),
   stocks: new ApiStockRepository(),

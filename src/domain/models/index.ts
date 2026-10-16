@@ -74,6 +74,8 @@ export type {
   UpdateLocationDTO,
 } from './location';
 
+export type { Currency } from './currency';
+
 export type {
   Movement,
   MovementType,

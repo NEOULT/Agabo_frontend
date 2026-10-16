@@ -32,6 +32,33 @@ export function useStock() {
     [stockRepo],
   );
 
+  /**
+   * Existencia disponible por producto en un almacén, para cobrar/despachar.
+   *
+   * Una venta del POS no lleva ubicación, e inventory descuenta la fila **sin
+   * ubicación** del almacén (`stock.decrement` compara `location_uuid IS NOT
+   * DISTINCT FROM null`), así que la existencia que cuenta es esa fila: repartir
+   * el total del almacén daría por disponible mercancía que la venta no puede
+   * tomar. Devuelve `{ product_id: cantidad }`.
+   */
+  const fetchAvailability = useCallback(
+    async (warehouseId: string, productIds: string[]): Promise<Record<string, number>> => {
+      const uniqueIds = [...new Set(productIds)];
+
+      const results = await Promise.all(
+        uniqueIds.map((productId) => stockRepo.getAll({ productId, warehouseId })),
+      );
+
+      return uniqueIds.reduce<Record<string, number>>((availability, productId, index) => {
+        availability[productId] = results[index].data
+          .filter((stock) => !stock.location_id)
+          .reduce((sum, stock) => sum + Number(stock.quantity), 0);
+        return availability;
+      }, {});
+    },
+    [stockRepo],
+  );
+
   const createStock = useCallback(
     async (data: CreateStockDTO) => {
       const stock = await stockRepo.create(data);
@@ -73,6 +100,7 @@ export function useStock() {
     isLoading,
     error,
     fetchStocks,
+    fetchAvailability,
     createStock,
     updateStock,
     activateStock,

@@ -31,6 +31,7 @@ export type { IPaymentRepository, PaymentQueryParams } from './IPaymentRepositor
 export type { IBranchRepository, BranchQueryParams } from './IBranchRepository';
 export type { IWarehouseRepository, WarehouseQueryParams } from './IWarehouseRepository';
 export type { ILocationRepository, LocationQueryParams } from './ILocationRepository';
+export type { ICurrencyRepository, CurrencyQueryParams } from './ICurrencyRepository';
 export type { IMovementRepository, MovementQueryParams } from './IMovementRepository';
 export type {
   IMovementTypeRepository,

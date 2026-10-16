@@ -32,11 +32,20 @@ export class ApiPaymentRepository implements IPaymentRepository {
 
   async create(data: CreatePaymentDTO): Promise<SalePayment> {
     try {
-      const { data: created } = await api.post<ApiPayment>('/payments', {
+      const payload: Record<string, number | string> = {
         sale_uuid: data.sale_id,
         payment_method_uuid: data.payment_method_id,
         payment_amount_num: data.amount,
-      });
+      };
+
+      // Cobro en otra moneda: el backend toma la tasa vigente del catálogo, la
+      // congela en el pago y calcula el importe en moneda base.
+      if (data.currency_id) payload.currency_uuid = data.currency_id;
+      if (data.currency_amount !== undefined) {
+        payload.payment_currency_amount_num = data.currency_amount;
+      }
+
+      const { data: created } = await api.post<ApiPayment>('/payments', payload);
       return toPayment(created);
     } catch (error) {
       throw toApiError(error);

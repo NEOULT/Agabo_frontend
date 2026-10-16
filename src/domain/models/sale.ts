@@ -46,8 +46,17 @@ export interface SalePayment {
   sale_id: string;
   /** payment_method_uuid */
   payment_method_id: string;
-  /** payment_amount_num — > 0 */
+  /** currency_uuid — moneda en que se recibió el pago (Bs, USD o EUR) */
+  currency_id: string;
+  /** payment_amount_num — importe en moneda base (> 0); cuenta para el saldo */
   amount: number;
+  /** payment_currency_amount_num — importe entregado en la moneda del pago */
+  currency_amount: number;
+  /**
+   * payment_exchange_rate_num — tasa congelada al registrar el pago: unidades de
+   * la moneda del pago por 1 unidad de la moneda base.
+   */
+  exchange_rate: number;
   /** payment_is_active_bl — si cuenta para el saldo de la venta */
   is_active: boolean;
   /** payment_created_at_tsz */
@@ -112,5 +121,13 @@ export interface CreateSaleDTO {
 export interface CreatePaymentDTO {
   sale_id: string;
   payment_method_id: string;
+  /** Importe en moneda base: es el que cuenta para el saldo de la venta (RN-SAL-010). */
   amount: number;
+  /** Moneda en que paga el cliente. Si se omite, el backend usa la moneda base. */
+  currency_id?: string;
+  /**
+   * Importe entregado en esa moneda. Si se envía, el backend calcula el importe
+   * en moneda base con la tasa vigente del catálogo y la congela en el pago.
+   */
+  currency_amount?: number;
 }

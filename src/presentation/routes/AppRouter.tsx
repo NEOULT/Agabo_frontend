@@ -59,6 +59,7 @@ const WarehouseListPage = page(() => import('@/presentation/features/company/war
 const WarehouseFormPage = page(() => import('@/presentation/features/company/warehouses/WarehouseFormPage'), 'WarehouseFormPage');
 const LocationListPage = page(() => import('@/presentation/features/company/locations/LocationListPage'), 'LocationListPage');
 const LocationFormPage = page(() => import('@/presentation/features/company/locations/LocationFormPage'), 'LocationFormPage');
+const CurrencyListPage = page(() => import('@/presentation/features/company/currencies/CurrencyListPage'), 'CurrencyListPage');
 
 // Inventario
 const MovementsPage = page(() => import('@/presentation/features/inventory/MovementsPage'), 'MovementsPage');
@@ -259,6 +260,18 @@ export function AppRouter() {
             <Route path="/company/locations" element={<LocationListPage />} />
             <Route path="/company/locations/new" element={<LocationFormPage />} />
             <Route path="/company/locations/:id/edit" element={<LocationFormPage />} />
+          </Route>
+
+          {/* Catálogo global de monedas (solo lectura) */}
+          <Route
+            element={
+              <PermissionGuard
+                permissions={['company.currencies:read']}
+                fallbackRoles={['super_admin']}
+              />
+            }
+          >
+            <Route path="/company/currencies" element={<CurrencyListPage />} />
           </Route>
 
           {/* Módulo Inventario: movimientos (kardex), tipos de movimiento y existencias */}

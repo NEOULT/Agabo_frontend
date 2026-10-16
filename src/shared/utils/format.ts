@@ -1,11 +1,22 @@
-/** Formatea un número como moneda colombiana (COP) */
-export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+import { BASE_CURRENCY_FORMAT, type CurrencyFormat } from '@/shared/config/currency';
+
+/**
+ * Formatea un número como moneda.
+ *
+ * Por defecto usa la moneda base (`$`). Recibe un formato opcional
+ * (`{ symbol, fractionDigits }`) para pintar el importe ya convertido a la
+ * moneda de visualización que venga del backend.
+ */
+export function formatCurrency(
+  value: number,
+  format: CurrencyFormat = BASE_CURRENCY_FORMAT,
+): string {
+  const { symbol, fractionDigits } = format;
+  const formatted = new Intl.NumberFormat('es-CO', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   }).format(value);
+  return `${symbol} ${formatted}`;
 }
 
 /** Formatea una fecha ISO a formato legible */

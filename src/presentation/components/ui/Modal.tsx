@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
@@ -56,7 +57,10 @@ export function Modal({
 
   if (!isOpen) return null;
 
-  return (
+  // Se monta en un portal a `document.body`: así el `fixed inset-0` se mide
+  // contra el viewport y no contra un ancestro con `transform` (p. ej. el
+  // wrapper animado de AppShell), que rompe `position: fixed`.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
@@ -110,6 +114,7 @@ export function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

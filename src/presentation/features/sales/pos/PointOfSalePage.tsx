@@ -4,7 +4,10 @@ import {
   Barcode,
   Camera,
   CheckCircle2,
+  Clock,
   CreditCard,
+  Eye,
+  EyeOff,
   Minus,
   Plus,
   Search,
@@ -19,6 +22,7 @@ import { Card } from '@/presentation/components/ui/Card';
 import { Input } from '@/presentation/components/ui/Input';
 import { Select } from '@/presentation/components/ui/Select';
 import { Textarea } from '@/presentation/components/ui/Textarea';
+import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog';
 import { EmptyState } from '@/presentation/components/shared/EmptyState';
 import { useProducts } from '@/application/hooks/useProducts';
 import { useCustomers } from '@/application/hooks/useCustomers';
@@ -28,11 +32,17 @@ import { useBranches } from '@/application/hooks/useBranches';
 import { useSales } from '@/application/hooks/useSales';
 import { usePayments } from '@/application/hooks/usePayments';
 import { usePrices } from '@/application/hooks/usePrices';
+import { useStock } from '@/application/hooks/useStock';
 import { usePermissions } from '@/application/hooks/usePermissions';
+import { useCurrencies } from '@/application/hooks/useCurrencies';
 import { toast } from '@/application/stores/useToastStore';
 import { formatCurrency } from '@/shared/utils/format';
-import type { Product } from '@/domain/models';
+import { BASE_CURRENCY_FORMAT, convertFromBase, type CurrencyFormat } from '@/shared/config/currency';
+import type { Currency, Product } from '@/domain/models';
 import { NewCustomerModal } from './NewCustomerModal';
+import { ParkedSalesModal } from './ParkedSalesModal';
+import { CheckoutConfirmModal } from './CheckoutConfirmModal';
+import { useParkedSalesStore, type ParkedSale } from '@/application/stores/useParkedSalesStore';
 
 /**
  * El escáner carga su librería (ZXing) bajo demanda: así el POS abre liviano y
@@ -51,6 +61,17 @@ interface CartLine {
   unit_name: string;
   quantity: number;
   unit_price: number;
+  /** Oculto con el "ojito": no cuenta en el total ni se cobra. */
+  is_hidden: boolean;
+}
+
+/** Acción del POS que espera confirmación del cajero. */
+interface PendingConfirm {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  variant: 'danger' | 'primary';
+  run: () => void;
 }
 
 /** Resumen del cobro que se acaba de registrar. */
@@ -86,6 +107,12 @@ function nextLineKey(): string {
   return `cart-${Date.now()}-${lineCounter}`;
 }
 
+let parkedCounter = 0;
+function nextParkedId(): string {
+  parkedCounter += 1;
+  return `parked-${Date.now()}-${parkedCounter}`;
+}
+
 /** Presentación por defecto: la base si está activa, si no la primera activa. */
 function defaultUnit(product: Product) {
   return (
@@ -116,6 +143,9 @@ export function PointOfSalePage() {
   const { createSale } = useSales();
   const { createPayment } = usePayments();
   const { getPrice, loadPrices, error: pricesError } = usePrices();
+  const { fetchAvailability } = useStock();
+  const { currencies, fetchCurrencies, error: currenciesError } = useCurrencies();
+  const { parkedSales, parkSale, removeParkedSale } = useParkedSalesStore();
 
   const { can } = usePermissions();
   const canSell = can('sales.sales:create') && can('sales.payments:create');
@@ -137,6 +167,20 @@ export function PointOfSalePage() {
   const [lastSale, setLastSale] = React.useState<LastSale | null>(null);
   const [isScannerOpen, setIsScannerOpen] = React.useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = React.useState(false);
+  const [isParkedOpen, setIsParkedOpen] = React.useState(false);
+  const [pendingConfirm, setPendingConfirm] = React.useState<PendingConfirm | null>(null);
+  const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
+  // Existencia del almacén de origen por producto, para avisar en la confirmación
+  // del cobro. `null` = sin dato aún (si no hay permiso de inventario o falla la
+  // consulta, el cobro sigue: el backend valida la existencia al registrar).
+  const [availability, setAvailability] = React.useState<Record<string, number> | null>(null);
+  const [isStockLoading, setIsStockLoading] = React.useState(false);
+  // Moneda de visualización del POS (solo vista; el cobro siempre va en la base).
+  // Vacío = todavía no cargaron las monedas del backend.
+  const [displayCurrencyCode, setDisplayCurrencyCode] = React.useState('');
+  // Moneda en que paga el cliente. Los precios y el total están en la moneda base
+  // ($); en Venezuela el cobro normal es en Bs, así que se elige aquí.
+  const [paymentCurrencyId, setPaymentCurrencyId] = React.useState('');
 
   const activeBranches = React.useMemo(() => branches.filter((b) => b.is_active), [branches]);
   const activeProducts = React.useMemo(() => products.filter((p) => p.is_active), [products]);
@@ -146,12 +190,46 @@ export function PointOfSalePage() {
     [paymentMethods],
   );
 
+  // Monedas del backend: la base (`is_base`) y la elegida para visualizar.
+  const activeCurrencies = React.useMemo(
+    () => currencies.filter((c) => c.is_active),
+    [currencies],
+  );
+  const baseCurrency = activeCurrencies.find((c) => c.is_base) ?? activeCurrencies[0];
+  const selectedCurrency =
+    activeCurrencies.find((c) => c.code === displayCurrencyCode) ?? baseCurrency;
+  const baseFormat: CurrencyFormat = baseCurrency
+    ? { symbol: baseCurrency.symbol, fractionDigits: baseCurrency.decimals }
+    : BASE_CURRENCY_FORMAT;
+  const isBaseDisplay = !selectedCurrency || selectedCurrency.is_base;
+
+  // Moneda del cobro: la elegida por el cajero o, por defecto, la base.
+  const paymentCurrency =
+    activeCurrencies.find((c) => c.id === paymentCurrencyId) ?? baseCurrency;
+  const isPaymentInBase = !paymentCurrency || paymentCurrency.is_base;
+
+  /** Pinta un importe (dado en moneda base) en la moneda indicada. */
+  const formatInCurrency = React.useCallback(
+    (valueInBase: number, currency: Currency) =>
+      formatCurrency(convertFromBase(valueInBase, currency.exchange_rate), {
+        symbol: currency.symbol,
+        fractionDigits: currency.decimals,
+      }),
+    [],
+  );
+
   // Catálogo base del cobro
   React.useEffect(() => {
     fetchProducts({ isActive: true });
     fetchCustomers({ isActive: true });
     fetchPaymentMethods({ isActive: true });
-  }, [fetchProducts, fetchCustomers, fetchPaymentMethods]);
+    fetchCurrencies({ isActive: true });
+  }, [fetchProducts, fetchCustomers, fetchPaymentMethods, fetchCurrencies]);
+
+  // Selecciona la moneda base cuando llega del backend.
+  React.useEffect(() => {
+    if (!displayCurrencyCode && baseCurrency) setDisplayCurrencyCode(baseCurrency.code);
+  }, [baseCurrency, displayCurrencyCode]);
 
   // Sucursal activa por defecto
   React.useEffect(() => {
@@ -171,9 +249,26 @@ export function PointOfSalePage() {
     setWarehouseId(warehouses[0]?.id ?? '');
   }, [warehouses, warehouseId]);
 
+  // Las líneas ocultas con el "ojito" quedan en el carrito pero no cuentan para
+  // el total ni se cobran: sirven para cotizar sin quitar el producto.
+  const saleLines = React.useMemo(() => cart.filter((line) => !line.is_hidden), [cart]);
+
   const total = React.useMemo(
-    () => cart.reduce((sum, line) => sum + line.quantity * line.unit_price, 0),
-    [cart],
+    () => saleLines.reduce((sum, line) => sum + line.quantity * line.unit_price, 0),
+    [saleLines],
+  );
+
+  // Los importes se muestran en la moneda elegida (símbolo, decimales y tasa del
+  // backend), pero la venta y el pago siempre viajan en la moneda base.
+  const money = React.useCallback(
+    (valueInBase: number) => {
+      if (!selectedCurrency) return formatCurrency(valueInBase, BASE_CURRENCY_FORMAT);
+      return formatCurrency(convertFromBase(valueInBase, selectedCurrency.exchange_rate), {
+        symbol: selectedCurrency.symbol,
+        fractionDigits: selectedCurrency.decimals,
+      });
+    },
+    [selectedCurrency],
   );
 
   // El importe sigue el total salvo que el cajero lo haya editado a mano.
@@ -222,6 +317,7 @@ export function PointOfSalePage() {
           unit_name: unit.name,
           quantity: 1,
           unit_price: catalogPrice,
+          is_hidden: false,
         },
       ];
     });
@@ -274,6 +370,12 @@ export function PointOfSalePage() {
 
   const removeLine = (key: string) => setCart((prev) => prev.filter((line) => line.key !== key));
 
+  /** Oculta/muestra una línea: oculta no cuenta en el total ni se cobra. */
+  const toggleLineHidden = (key: string) =>
+    setCart((prev) =>
+      prev.map((line) => (line.key === key ? { ...line, is_hidden: !line.is_hidden } : line)),
+    );
+
   const clearSale = () => {
     setCart([]);
     setSearch('');
@@ -284,10 +386,122 @@ export function PointOfSalePage() {
     searchRef.current?.focus();
   };
 
+  /** Guarda el carrito actual como ticket en espera y deja el POS libre. */
+  const applyParkSale = () => {
+    const customer = activeCustomers.find((c) => c.id === customerId);
+    const label = customer?.name ?? `Ticket ${parkedSales.length + 1}`;
+
+    parkSale({
+      id: nextParkedId(),
+      label,
+      created_at: new Date().toISOString(),
+      customer_id: customerId,
+      note,
+      branch_id: branchId,
+      warehouse_id: warehouseId,
+      payment_method_id: paymentMethodId,
+      lines: cart.map((line) => ({
+        product_id: line.product_id,
+        product_unit_id: line.product_unit_id,
+        product_name: line.product_name,
+        unit_name: line.unit_name,
+        quantity: line.quantity,
+        unit_price: line.unit_price,
+        is_hidden: line.is_hidden,
+      })),
+    });
+
+    setCart([]);
+    setSearch('');
+    setCustomerId('');
+    setNote('');
+    setPaymentMethodId('');
+    setAmount('');
+    setAmountEdited(false);
+    setLastSale(null);
+    searchRef.current?.focus();
+    toast.success(`"${label}" quedó en espera.`);
+  };
+
+  /** Carga un ticket en espera en el POS y lo retira de la lista. */
+  const applyParkedSale = (sale: ParkedSale) => {
+    setCart(sale.lines.map((line) => ({ ...line, key: nextLineKey() })));
+    setCustomerId(sale.customer_id);
+    setNote(sale.note);
+    setPaymentMethodId(sale.payment_method_id);
+    if (sale.branch_id) setBranchId(sale.branch_id);
+    if (sale.warehouse_id) setWarehouseId(sale.warehouse_id);
+    setAmountEdited(false);
+    setLastSale(null);
+    removeParkedSale(sale.id);
+    setIsParkedOpen(false);
+    searchRef.current?.focus();
+    toast.success(`"${sale.label}" retomado.`);
+  };
+
+  const handleResume = (sale: ParkedSale) => {
+    // Con un carrito a medias se confirma antes de descartarlo.
+    if (cart.length > 0) {
+      setPendingConfirm({
+        title: 'Retomar ticket en espera',
+        message: `El carrito actual tiene ${cart.length} línea(s) sin cobrar y se descartará al retomar "${sale.label}". ¿Continuar?`,
+        confirmLabel: 'Retomar',
+        variant: 'danger',
+        run: () => applyParkedSale(sale),
+      });
+      return;
+    }
+    applyParkedSale(sale);
+  };
+
+  /** Pide confirmación antes de poner el ticket en espera. */
+  const requestPark = () => {
+    if (cart.length === 0) {
+      toast.error('Agrega al menos un producto antes de ponerlo en espera.');
+      return;
+    }
+
+    const customer = activeCustomers.find((c) => c.id === customerId);
+    setPendingConfirm({
+      title: 'Poner en espera',
+      message: customer
+        ? `Se guardará el ticket de "${customer.name}" y el POS quedará libre para atender a otro cliente.`
+        : 'Se guardará el ticket actual y el POS quedará libre para atender a otro cliente.',
+      confirmLabel: 'Poner en espera',
+      variant: 'primary',
+      run: applyParkSale,
+    });
+  };
+
+  /** Pide confirmación antes de vaciar el carrito. */
+  const requestClear = () =>
+    setPendingConfirm({
+      title: 'Vaciar carrito',
+      message: 'Se quitarán todos los productos del carrito. Esta acción no se puede deshacer.',
+      confirmLabel: 'Vaciar',
+      variant: 'danger',
+      run: clearSale,
+    });
+
+  /** Pide confirmación antes de quitar una línea (se puede pulsar sin querer). */
+  const requestRemoveLine = (line: CartLine) =>
+    setPendingConfirm({
+      title: 'Quitar producto',
+      message: `¿Quitar "${line.product_name}" del carrito?`,
+      confirmLabel: 'Quitar',
+      variant: 'danger',
+      run: () => removeLine(line.key),
+    });
+
+  const confirmPending = () => {
+    pendingConfirm?.run();
+    setPendingConfirm(null);
+  };
+
   const parsedAmount = Number(amount);
   const canConfirm =
     canSell &&
-    cart.length > 0 &&
+    saleLines.length > 0 &&
     !!branchId &&
     !!warehouseId &&
     !!paymentMethodId &&
@@ -297,12 +511,52 @@ export function PointOfSalePage() {
     parsedAmount <= total &&
     !isSaving;
 
-  const handleCheckout = async () => {
-    if (cart.length === 0) {
+  // Importe que entrega el cliente en la moneda del cobro, redondeado al céntimo
+  // de esa moneda: viaja junto con la moneda y el backend congela la tasa.
+  const paymentCurrencyAmount = React.useMemo(() => {
+    if (!paymentCurrency || isPaymentInBase || parsedAmount <= 0) return undefined;
+    const converted = convertFromBase(parsedAmount, paymentCurrency.exchange_rate);
+    return Math.round((converted + Number.EPSILON) * 100) / 100;
+  }, [isPaymentInBase, parsedAmount, paymentCurrency]);
+
+  // Resumen del cobro en la moneda del cliente para la confirmación.
+  const paymentInCurrencyView =
+    !isPaymentInBase && paymentCurrency && parsedAmount > 0 && !Number.isNaN(parsedAmount)
+      ? {
+          code: paymentCurrency.code,
+          amountLabel: formatInCurrency(parsedAmount, paymentCurrency),
+          rateLabel: String(paymentCurrency.exchange_rate),
+          baseSymbol: baseFormat.symbol,
+        }
+      : null;
+
+  /** Trae la existencia del almacén de origen para la confirmación del cobro. */
+  const loadAvailability = React.useCallback(async () => {
+    if (!warehouseId) {
+      setAvailability(null);
+      return;
+    }
+
+    setIsStockLoading(true);
+    setAvailability(null);
+    try {
+      setAvailability(await fetchAvailability(warehouseId, saleLines.map((l) => l.product_id)));
+    } catch {
+      // Sin permiso de inventario o sin red: no se bloquea el cobro, el backend
+      // sigue siendo el que rechaza una venta sin existencia.
+      setAvailability(null);
+    } finally {
+      setIsStockLoading(false);
+    }
+  }, [fetchAvailability, saleLines, warehouseId]);
+
+  /** Valida el cobro y abre la confirmación con la lista de productos. */
+  const requestCheckout = () => {
+    if (saleLines.length === 0) {
       toast.error('Agrega al menos un producto.');
       return;
     }
-    const lineWithoutPrice = cart.find((line) => !(line.unit_price > 0));
+    const lineWithoutPrice = saleLines.find((line) => !(line.unit_price > 0));
     if (lineWithoutPrice) {
       toast.error(`Asigna un precio a "${lineWithoutPrice.product_name}".`);
       return;
@@ -324,6 +578,12 @@ export function PointOfSalePage() {
       return;
     }
 
+    setIsCheckoutOpen(true);
+    void loadAvailability();
+  };
+
+  /** Cobra de verdad: crea la venta y su pago. Se llama desde la confirmación. */
+  const handleCheckout = async () => {
     setIsSaving(true);
     try {
       // 1) La venta: el backend calcula el total y genera el movimiento de salida.
@@ -332,7 +592,7 @@ export function PointOfSalePage() {
         warehouse_id: warehouseId,
         customer_id: customerId || undefined,
         note: note.trim() || undefined,
-        details: cart.map((line) => ({
+        details: saleLines.map((line) => ({
           product_id: line.product_id,
           product_unit_id: line.product_unit_id,
           quantity: line.quantity,
@@ -345,7 +605,11 @@ export function PointOfSalePage() {
         await createPayment({
           sale_id: sale.id,
           payment_method_id: paymentMethodId,
+          // El importe base es el que cuenta para el saldo de la venta; la moneda
+          // elegida solo dice con qué pagó el cliente y a qué tasa.
           amount: parsedAmount,
+          currency_id: paymentCurrency?.id,
+          currency_amount: paymentCurrencyAmount,
         });
       } catch (paymentError) {
         // La venta ya existe: queda pendiente y se completa desde el historial.
@@ -363,6 +627,7 @@ export function PointOfSalePage() {
             paymentError instanceof Error ? paymentError.message : 'no se pudo registrar el pago'
           }`,
         );
+        setIsCheckoutOpen(false);
         return;
       }
 
@@ -375,10 +640,13 @@ export function PointOfSalePage() {
         balance: sale.total - parsedAmount,
       });
       toast.success(`Venta ${sale.code} cobrada.`);
+      setIsCheckoutOpen(false);
     } catch (err) {
       // El backend devuelve mensajes específicos (stock insuficiente, sin precio,
-      // padre inactivo, referencia inválida...)
+      // padre inactivo, referencia inválida...). La confirmación sigue abierta
+      // para corregir el carrito sin perder lo que se lleva el cliente.
       toast.error(err instanceof Error ? err.message : 'No se pudo registrar la venta.');
+      void loadAvailability();
     } finally {
       setIsSaving(false);
     }
@@ -389,7 +657,7 @@ export function PointOfSalePage() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F2') {
         e.preventDefault();
-        if (canConfirm) handleCheckout();
+        if (canConfirm) requestCheckout();
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -408,14 +676,29 @@ export function PointOfSalePage() {
             Escanea o busca un producto, ajusta el carrito y cobra.
           </p>
         </div>
-        {canSeeHistory && (
-          <Link
-            to="/sales/history"
-            className="text-sm font-medium text-brand-600 hover:text-brand-700"
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => setIsParkedOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-border-input px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-tertiary"
           >
-            Ver historial →
-          </Link>
-        )}
+            <Clock className="h-4 w-4" />
+            En espera
+            {parkedSales.length > 0 && (
+              <span className="rounded-full bg-brand-600 px-2 py-0.5 text-xs font-semibold text-white">
+                {parkedSales.length}
+              </span>
+            )}
+          </button>
+          {canSeeHistory && (
+            <Link
+              to="/sales/history"
+              className="text-sm font-medium text-brand-600 hover:text-brand-700"
+            >
+              Ver historial →
+            </Link>
+          )}
+        </div>
       </div>
 
       {pricesError && (
@@ -425,14 +708,21 @@ export function PointOfSalePage() {
         </div>
       )}
 
+      {currenciesError && (
+        <div className="mb-4 rounded-lg border border-semantic-warning-400 bg-semantic-warning-50 px-4 py-3 text-sm text-semantic-warning-800">
+          No se pudieron cargar las monedas ({currenciesError}). Se muestra el cobro en la moneda
+          base.
+        </div>
+      )}
+
       {lastSale && (
         <div className="mb-4 flex items-center gap-3 rounded-lg border border-semantic-success-200 bg-semantic-success-50 px-4 py-3 text-sm text-semantic-success-800">
           <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
           <span>
             Venta <span className="font-semibold">{lastSale.code}</span> cobrada por{' '}
-            <span className="font-semibold">{formatCurrency(lastSale.paid)}</span>
+            <span className="font-semibold">{money(lastSale.paid)}</span>
             {lastSale.balance > 0
-              ? ` · saldo ${formatCurrency(lastSale.balance)} (queda parcial)`
+              ? ` · saldo ${money(lastSale.balance)} (queda parcial)`
               : ' · pagada'}
             .{' '}
             <Link className="font-medium underline" to={`/sales/history/${lastSale.id}`}>
@@ -517,7 +807,7 @@ export function PointOfSalePage() {
                           </span>
                         </span>
                         <span className="text-sm font-semibold text-text-primary">
-                          {price !== undefined ? formatCurrency(price) : 'Sin precio'}
+                          {price !== undefined ? money(price) : 'Sin precio'}
                         </span>
                         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
                           <Plus className="h-4 w-4" />
@@ -546,7 +836,10 @@ export function PointOfSalePage() {
                   .map((u) => ({ value: u.id, label: `${u.name} (×${u.factor})` }));
 
                 return (
-                  <li key={line.key} className="flex items-center gap-3 px-3 py-3">
+                  <li
+                    key={line.key}
+                    className={`flex items-center gap-3 px-3 py-3 ${line.is_hidden ? 'opacity-50' : ''}`}
+                  >
                     <span
                       className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${avatarClass(line.product_name)}`}
                     >
@@ -571,8 +864,13 @@ export function PointOfSalePage() {
                           ))}
                         </select>
                         <span className="text-xs text-text-tertiary">
-                          {line.unit_price > 0 ? `${formatCurrency(line.unit_price)} c/u` : 'sin precio'}
+                          {line.unit_price > 0 ? `${money(line.unit_price)} c/u` : 'sin precio'}
                         </span>
+                        {line.is_hidden && (
+                          <span className="text-xs font-medium text-semantic-warning-700">
+                            No cuenta
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -609,26 +907,49 @@ export function PointOfSalePage() {
                       </button>
                     </div>
 
-                    {/* Precio editable */}
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={line.unit_price}
-                      onChange={(e) =>
-                        updateLine(line.key, { unit_price: Math.max(0, Number(e.target.value)) })
-                      }
-                      className="w-20 rounded-lg border border-border-input bg-surface-primary px-2 py-1 text-right text-sm"
-                      aria-label="Precio unitario"
-                    />
+                    {/* Precio editable (siempre en moneda base) */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-text-muted">
+                        {baseFormat.symbol}
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={line.unit_price}
+                        onChange={(e) =>
+                          updateLine(line.key, { unit_price: Math.max(0, Number(e.target.value)) })
+                        }
+                        className="w-20 rounded-lg border border-border-input bg-surface-primary px-2 py-1 text-right text-sm"
+                        aria-label="Precio unitario (moneda base)"
+                      />
+                    </div>
 
                     <span className="w-24 text-right text-sm font-semibold text-text-primary">
-                      {formatCurrency(line.quantity * line.unit_price)}
+                      {money(line.quantity * line.unit_price)}
                     </span>
 
                     <button
                       type="button"
-                      onClick={() => removeLine(line.key)}
+                      onClick={() => toggleLineHidden(line.key)}
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                        line.is_hidden
+                          ? 'text-semantic-warning-600 hover:bg-surface-tertiary'
+                          : 'text-text-muted hover:text-brand-600 hover:bg-surface-tertiary'
+                      }`}
+                      aria-label={line.is_hidden ? 'Mostrar en el total' : 'Ocultar del total'}
+                      title={line.is_hidden ? 'Mostrar en el total' : 'Ocultar del total'}
+                    >
+                      {line.is_hidden ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => requestRemoveLine(line)}
                       className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:text-semantic-danger-600 hover:bg-surface-tertiary"
                       aria-label="Quitar del carrito"
                     >
@@ -643,15 +964,25 @@ export function PointOfSalePage() {
           {cart.length > 0 && (
             <div className="flex items-center justify-between gap-3 border-t border-border-subtle px-4 py-3">
               <span className="text-sm text-text-tertiary">
-                {cart.reduce((sum, line) => sum + line.quantity, 0)} unidad(es)
+                {saleLines.reduce((sum, line) => sum + line.quantity, 0)} unidad(es)
+                {cart.length > saleLines.length && ' · con ocultos'}
               </span>
-              <button
-                type="button"
-                onClick={clearSale}
-                className="text-sm text-text-tertiary hover:text-semantic-danger-600"
-              >
-                Vaciar carrito
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={requestPark}
+                  className="text-sm font-medium text-brand-600 hover:text-brand-700"
+                >
+                  Poner en espera
+                </button>
+                <button
+                  type="button"
+                  onClick={requestClear}
+                  className="text-sm text-text-tertiary hover:text-semantic-danger-600"
+                >
+                  Vaciar carrito
+                </button>
+              </div>
             </div>
           )}
         </Card>
@@ -708,6 +1039,18 @@ export function PointOfSalePage() {
               }
             />
 
+            {activeCurrencies.length > 1 && (
+              <Select
+                label="Moneda de pago"
+                value={paymentCurrency?.id ?? ''}
+                onChange={(e) => setPaymentCurrencyId(e.target.value)}
+                options={activeCurrencies.map((c) => ({
+                  value: c.id,
+                  label: `${c.code} (${c.symbol})${c.is_base ? ' · base' : ''}`,
+                }))}
+              />
+            )}
+
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <Input
@@ -720,6 +1063,11 @@ export function PointOfSalePage() {
                     setAmount(e.target.value);
                     setAmountEdited(true);
                   }}
+                  helperText={
+                    !isPaymentInBase
+                      ? `Se escribe en ${baseFormat.symbol} (moneda base): el equivalente en la moneda de pago sale de la tasa del catálogo.`
+                      : undefined
+                  }
                   error={
                     amount.trim() !== '' && parsedAmount > total
                       ? 'No puede superar el total.'
@@ -740,6 +1088,21 @@ export function PointOfSalePage() {
               </Button>
             </div>
 
+            {!isPaymentInBase && paymentCurrency && (
+              <p className="rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-800">
+                El cliente paga {' '}
+                <span className="font-semibold">
+                  {formatInCurrency(
+                    Number.isNaN(parsedAmount) ? 0 : parsedAmount,
+                    paymentCurrency,
+                  )}
+                </span>
+                {' '}en {paymentCurrency.code} · tasa {paymentCurrency.exchange_rate}{' '}
+                {paymentCurrency.code} por {baseFormat.symbol} 1. El saldo de la venta queda en{' '}
+                {baseFormat.symbol} (moneda base).
+              </p>
+            )}
+
             <Textarea
               label="Nota (opcional)"
               value={note}
@@ -748,20 +1111,51 @@ export function PointOfSalePage() {
               placeholder="Ej: Entrega en mostrador."
             />
 
+            {activeCurrencies.length > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-text-tertiary">Moneda</span>
+                <div className="inline-flex rounded-lg border border-border-input p-0.5">
+                  {activeCurrencies.map((currency) => (
+                    <button
+                      key={currency.code}
+                      type="button"
+                      onClick={() => setDisplayCurrencyCode(currency.code)}
+                      aria-pressed={displayCurrencyCode === currency.code}
+                      className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                        displayCurrencyCode === currency.code
+                          ? 'bg-brand-600 text-white'
+                          : 'text-text-secondary hover:bg-surface-tertiary'
+                      }`}
+                    >
+                      {currency.symbol}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between border-t border-border-subtle pt-4">
               <span className="text-sm text-text-tertiary">Total</span>
-              <span className="text-2xl font-bold text-text-primary">{formatCurrency(total)}</span>
+              <span className="text-2xl font-bold text-text-primary">{money(total)}</span>
             </div>
+
+            {!isBaseDisplay && selectedCurrency && (
+              <p className="rounded-lg bg-surface-tertiary px-3 py-2 text-xs text-text-tertiary">
+                Visualización en {selectedCurrency.symbol} · 1 {baseFormat.symbol} ={' '}
+                {selectedCurrency.exchange_rate} {selectedCurrency.code}. El cobro se registra en{' '}
+                {baseFormat.symbol} (moneda base).
+              </p>
+            )}
 
             <Button
               className="w-full"
               size="lg"
               leftIcon={<CreditCard className="h-5 w-5" />}
-              onClick={handleCheckout}
+              onClick={requestCheckout}
               isLoading={isSaving}
               disabled={!canConfirm}
             >
-              Cobrar ({formatCurrency(parsedAmount > 0 ? parsedAmount : 0)})
+              Cobrar ({money(parsedAmount > 0 ? parsedAmount : 0)})
             </Button>
 
             <p className="text-right text-xs text-text-tertiary">F2 = cobrar</p>
@@ -795,6 +1189,41 @@ export function PointOfSalePage() {
         isOpen={isCustomerModalOpen}
         onClose={() => setIsCustomerModalOpen(false)}
         onCreated={(customer) => setCustomerId(customer.id)}
+      />
+
+      <ParkedSalesModal
+        isOpen={isParkedOpen}
+        onClose={() => setIsParkedOpen(false)}
+        sales={parkedSales}
+        formatAmount={money}
+        onResume={handleResume}
+        onRemove={removeParkedSale}
+      />
+
+      <CheckoutConfirmModal
+        isOpen={isCheckoutOpen}
+        onClose={() => setIsCheckoutOpen(false)}
+        onConfirm={handleCheckout}
+        isLoading={isSaving}
+        lines={saleLines}
+        hiddenCount={cart.length - saleLines.length}
+        total={total}
+        amount={parsedAmount}
+        customerName={activeCustomers.find((c) => c.id === customerId)?.name}
+        formatAmount={money}
+        availability={availability}
+        isStockLoading={isStockLoading}
+        paymentInCurrency={paymentInCurrencyView}
+      />
+
+      <ConfirmDialog
+        isOpen={pendingConfirm !== null}
+        onClose={() => setPendingConfirm(null)}
+        onConfirm={confirmPending}
+        title={pendingConfirm?.title ?? ''}
+        message={pendingConfirm?.message ?? ''}
+        confirmLabel={pendingConfirm?.confirmLabel ?? 'Confirmar'}
+        variant={pendingConfirm?.variant ?? 'danger'}
       />
     </div>
   );
