@@ -1,17 +1,31 @@
 import { Link } from 'react-router-dom';
-import { LogOut, User, Building2, ChevronDown, KeyRound } from 'lucide-react';
+import { LogOut, User, Building2, ChevronDown, KeyRound, Menu } from 'lucide-react';
 import { useAuth } from '@/application/hooks/useAuth';
 import { useBranchStore } from '@/application/stores/useBranchStore';
+import { useUIStore } from '@/application/stores/useUIStore';
 
 export function Navbar() {
   const { user, logout } = useAuth();
   const { branches, activeBranch, setActiveBranch } = useBranchStore();
+  const mobileNavOpen = useUIStore((state) => state.mobileNavOpen);
+  const openMobileNav = useUIStore((state) => state.openMobileNav);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between bg-header-bg px-4 shadow-soft sm:px-6">
       {/* Left side */}
       <div className="flex items-center gap-4">
-        <h2 className="text-lg font-semibold text-header-text">
+        {/* En móvil la sidebar está oculta: se abre con este botón */}
+        <button
+          onClick={openMobileNav}
+          className="-ml-1 rounded-lg p-2 text-header-text transition-colors hover:bg-header-hover lg:hidden"
+          aria-label="Abrir menú"
+          aria-controls="mobile-sidebar"
+          aria-expanded={mobileNavOpen}
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+
+        <h2 className="truncate text-lg font-semibold text-header-text">
           {activeBranch?.name ?? 'Sistema de Inventario'}
         </h2>
       </div>

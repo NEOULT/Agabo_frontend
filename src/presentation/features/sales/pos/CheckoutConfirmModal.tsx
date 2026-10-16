@@ -1,21 +1,7 @@
 import { ShoppingCart } from 'lucide-react';
 import { Modal } from '@/presentation/components/ui/Modal';
 import { Button } from '@/presentation/components/ui/Button';
-
-/**
- * Cobro en la moneda en que paga el cliente. Los precios y el total están en la
- * moneda base, así que aquí se repasa lo que el cliente entrega.
- */
-export interface PaymentInCurrencyView {
-  /** Código ISO de la moneda cobrada (Bs, EUR...). */
-  code: string;
-  /** Importe ya formateado con el símbolo de esa moneda. */
-  amountLabel: string;
-  /** Tasa usada: unidades de esa moneda por 1 unidad de la moneda base. */
-  rateLabel: string;
-  /** Símbolo de la moneda base, donde queda el saldo de la venta. */
-  baseSymbol: string;
-}
+import type { PaymentInCurrencyView } from '@/application/hooks/pos/pos.types';
 
 /** Línea que se muestra en la confirmación (subconjunto del carrito). */
 export interface CheckoutLineView {
