@@ -24,6 +24,7 @@ import type {
   IAuthorizationCatalogRepository,
   IMovementTypeRepository,
   IStockRepository,
+  IScanSessionRepository,
 } from '@/domain/repositories';
 
 import { ApiAuthRepository } from '@/infrastructure/api/ApiAuthRepository';
@@ -50,6 +51,7 @@ import { ApiAuthorizationCatalogRepository } from '@/infrastructure/api/ApiAutho
 import { ApiMovementRepository } from '@/infrastructure/api/ApiMovementRepository';
 import { ApiMovementTypeRepository } from '@/infrastructure/api/ApiMovementTypeRepository';
 import { ApiStockRepository } from '@/infrastructure/api/ApiStockRepository';
+import { ApiScanSessionRepository } from '@/infrastructure/api/ApiScanSessionRepository';
 
 export interface Repositories {
   products: IProductRepository;
@@ -72,6 +74,7 @@ export interface Repositories {
   movements: IMovementRepository;
   movementTypes: IMovementTypeRepository;
   stocks: IStockRepository;
+  scanSessions: IScanSessionRepository;
   auth: IAuthRepository;
   users: IUserRepository;
   profiles: IProfileRepository;
@@ -105,6 +108,7 @@ const repositories: Repositories = {
   movements: new ApiMovementRepository(),
   movementTypes: new ApiMovementTypeRepository(),
   stocks: new ApiStockRepository(),
+  scanSessions: new ApiScanSessionRepository(),
   auth: new ApiAuthRepository(),
   users: new ApiUserRepository(),
   profiles: new ApiProfileRepository(),

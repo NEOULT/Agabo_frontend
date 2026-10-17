@@ -1,6 +1,15 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Camera, Clock, CreditCard, Search, ShoppingCart, UserPlus, Warehouse } from 'lucide-react';
+import {
+  Camera,
+  Clock,
+  CreditCard,
+  Search,
+  ShoppingCart,
+  Smartphone,
+  UserPlus,
+  Warehouse,
+} from 'lucide-react';
 import { Button } from '@/presentation/components/ui/Button';
 import { Card } from '@/presentation/components/ui/Card';
 import { Input } from '@/presentation/components/ui/Input';
@@ -23,10 +32,12 @@ import { usePosCurrency } from '@/application/hooks/pos/usePosCurrency';
 import type {
   CartLine,
   ParkedTicketSnapshot,
+  PhoneScanOutcome,
   PosPendingConfirm,
 } from '@/application/hooks/pos/pos.types';
 import { findByExactCode, searchProducts } from '@/application/hooks/pos/pos.utils';
 import { toast } from '@/application/stores/useToastStore';
+import { usePosSessionStore } from '@/application/stores/usePosSessionStore';
 import type { Product } from '@/domain/models';
 import { NewCustomerModal } from './NewCustomerModal';
 import { ParkedSalesModal } from './ParkedSalesModal';
@@ -42,6 +53,11 @@ import type { ParkedSale } from '@/application/stores/useParkedSalesStore';
  */
 const BarcodeScannerModal = React.lazy(() =>
   import('./BarcodeScannerModal').then((module) => ({ default: module.BarcodeScannerModal })),
+);
+
+/** El escaneo por teléfono también baja bajo demanda (arrastra el generador de QR). */
+const PhoneScanModal = React.lazy(() =>
+  import('./PhoneScanModal').then((module) => ({ default: module.PhoneScanModal })),
 );
 
 /**
@@ -71,19 +87,32 @@ export function PointOfSalePage() {
   const canSell = can('sales.sales:create') && can('sales.payments:create');
   const canSeeHistory = can('sales.sales:read');
   const canCreateCustomer = can('sales.customers:create');
+  const canPhoneScan = can('sales.pos_scan_sessions:create');
 
   const searchRef = React.useRef<HTMLInputElement>(null);
 
-  // Sesión de mostrador: lo que no pertenece a ningún dominio extraído.
-  const [branchId, setBranchId] = React.useState('');
-  const [warehouseId, setWarehouseId] = React.useState('');
-  const [customerId, setCustomerId] = React.useState('');
-  const [note, setNote] = React.useState('');
+  // El buscador, la sucursal y los modales son estado de pantalla. La sesión de
+  // mostrador (carrito + las decisiones del cobro) vive en un store persistido,
+  // así que salir de la pantalla o recargar no pierde la venta en curso.
   const [search, setSearch] = React.useState('');
-  const [paymentMethodId, setPaymentMethodId] = React.useState('');
-  const [amount, setAmount] = React.useState('');
-  const [amountEdited, setAmountEdited] = React.useState(false);
+  // La sucursal no se persiste: el cobro debe seguir a la sucursal ACTIVA de la
+  // app, que es la que viaja en la cabecera `X-Branch-Uuid` de cada petición.
+  const [branchId, setBranchId] = React.useState('');
+
+  const warehouseId = usePosSessionStore((state) => state.warehouseId);
+  const setWarehouseId = usePosSessionStore((state) => state.setWarehouseId);
+  const customerId = usePosSessionStore((state) => state.customerId);
+  const setCustomerId = usePosSessionStore((state) => state.setCustomerId);
+  const note = usePosSessionStore((state) => state.note);
+  const setNote = usePosSessionStore((state) => state.setNote);
+  const paymentMethodId = usePosSessionStore((state) => state.paymentMethodId);
+  const setPaymentMethodId = usePosSessionStore((state) => state.setPaymentMethodId);
+  const amount = usePosSessionStore((state) => state.amount);
+  const setAmount = usePosSessionStore((state) => state.setAmount);
+  const amountEdited = usePosSessionStore((state) => state.amountEdited);
+  const setAmountEdited = usePosSessionStore((state) => state.setAmountEdited);
   const [isScannerOpen, setIsScannerOpen] = React.useState(false);
+  const [isPhoneScanOpen, setIsPhoneScanOpen] = React.useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = React.useState(false);
   const [isParkedOpen, setIsParkedOpen] = React.useState(false);
   const [pendingConfirm, setPendingConfirm] = React.useState<PosPendingConfirm | null>(null);
@@ -217,7 +246,7 @@ export function PointOfSalePage() {
     fetchCurrencies({ isActive: true });
   }, [fetchProducts, fetchCustomers, fetchPaymentMethods, fetchCurrencies]);
 
-  // Sucursal activa por defecto
+  // Sucursal activa por defecto (la misma que acota el backend).
   React.useEffect(() => {
     if (activeBranch?.is_active && !branchId) setBranchId(activeBranch.id);
   }, [activeBranch, branchId]);
@@ -281,6 +310,23 @@ export function PointOfSalePage() {
     setSearch(code);
     searchRef.current?.focus();
     toast.error(`Ningún producto tiene el código "${code}".`);
+  };
+
+  /**
+   * Escaneo por teléfono: agrega el producto si existe y devuelve su nombre al
+   * modal (o `null` para que muestre "Producto no encontrado"). A diferencia del
+   * lector del mostrador no escribe en el buscador ni avisa con un toast: el
+   * propio modal ya enseña el resultado de cada código.
+   */
+  const handlePhoneScanCode = (code: string): PhoneScanOutcome => {
+    const product = findByExactCode(activeProducts, code);
+
+    if (product) {
+      handleAddProduct(product);
+      return { productName: product.name };
+    }
+
+    return { productName: null };
   };
 
   /** Enter en el buscador: agrega el mejor resultado (por nombre o código). */
@@ -448,6 +494,16 @@ export function PointOfSalePage() {
               >
                 Escanear
               </Button>
+              {canPhoneScan && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  leftIcon={<Smartphone className="h-4 w-4" />}
+                  onClick={() => setIsPhoneScanOpen(true)}
+                >
+                  Teléfono
+                </Button>
+              )}
             </div>
 
             {search.trim() !== '' && (
@@ -720,6 +776,16 @@ export function PointOfSalePage() {
             isOpen
             onClose={() => setIsScannerOpen(false)}
             onDetected={handleDetected}
+          />
+        </React.Suspense>
+      )}
+
+      {isPhoneScanOpen && (
+        <React.Suspense fallback={null}>
+          <PhoneScanModal
+            isOpen
+            onClose={() => setIsPhoneScanOpen(false)}
+            onDetected={handlePhoneScanCode}
           />
         </React.Suspense>
       )}

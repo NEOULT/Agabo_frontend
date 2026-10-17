@@ -40,6 +40,8 @@ export type {
 
 export type { Customer, CreateCustomerDTO, UpdateCustomerDTO } from './customer';
 
+export type { ScanSession, ScannedCode, ScannedCodeBatch } from './scan-session';
+
 export type {
   PaymentMethod,
   CreatePaymentMethodDTO,

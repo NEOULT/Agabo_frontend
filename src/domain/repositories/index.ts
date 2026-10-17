@@ -38,6 +38,7 @@ export type {
   MovementTypeQueryParams,
 } from './IMovementTypeRepository';
 export type { IStockRepository, StockQueryParams } from './IStockRepository';
+export type { IScanSessionRepository } from './IScanSessionRepository';
 export type { IAuthRepository } from './IAuthRepository';
 export type { IUserRepository, UserQueryParams } from './IUserRepository';
 export type { IProfileRepository, ProfileQueryParams } from './IProfileRepository';

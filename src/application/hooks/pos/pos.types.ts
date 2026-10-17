@@ -28,6 +28,24 @@ export interface CartLine {
   is_hidden: boolean;
 }
 
+/**
+ * Resultado de resolver un código escaneado contra el catálogo del POS.
+ * El escaneo por teléfono lo usa para pintar el nombre en el modal.
+ */
+export interface PhoneScanOutcome {
+  /** Nombre del producto si el código existe; `null` si no se encontró. */
+  productName: string | null;
+}
+
+/** Código recibido del teléfono, ya resuelto contra el catálogo. */
+export interface PhoneScannedItem {
+  /** Id incremental de la sesión; sirve de clave en React. */
+  id: number;
+  code: string;
+  /** Nombre del producto, o `null` si ninguno tiene ese código. */
+  productName: string | null;
+}
+
 /** Acción del POS que espera confirmación del cajero. */
 export interface PosPendingConfirm {
   title: string;

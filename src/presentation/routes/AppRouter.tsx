@@ -22,6 +22,12 @@ function page<T extends Record<string, unknown>>(
 
 const ChangePasswordPage = page(() => import('@/presentation/features/auth/ChangePasswordPage'), 'ChangePasswordPage');
 
+// Escaneo por teléfono: página pública (el token del QR es la credencial).
+const PhoneScanPage = page(
+  () => import('@/presentation/features/sales/pos/PhoneScanPage'),
+  'PhoneScanPage',
+);
+
 // Dashboard
 const DashboardPage = page(() => import('@/presentation/features/dashboard/DashboardPage'), 'DashboardPage');
 
@@ -80,6 +86,9 @@ export function AppRouter() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+
+      {/* El teléfono abre este QR sin iniciar sesión: el token lo autoriza. */}
+      <Route path="/scan/:token" element={<PhoneScanPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>

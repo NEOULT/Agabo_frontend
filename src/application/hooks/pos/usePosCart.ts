@@ -1,11 +1,11 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { ParkedSaleLine } from '@/application/stores/useParkedSalesStore';
+import { usePosSessionStore } from '@/application/stores/usePosSessionStore';
 import type { Product, ProductUnit } from '@/domain/models';
 import type { CartLine } from './pos.types';
 import {
   billableLines,
   cartItemsCount,
-  cartLineKey,
   cartTotal,
   defaultUnit,
   fromParkedLines,
@@ -20,12 +20,22 @@ interface UsePosCartOptions {
 /**
  * Carrito del punto de venta.
  *
- * Guarda las líneas y sus mutaciones; no sabe nada del cobro, del cliente ni de
- * la pantalla. Cada línea oculta con el "ojito" sigue en el carrito pero no
- * cuenta para el total ni se cobra.
+ * Las líneas no viven en el componente sino en `usePosSessionStore`, que se
+ * persiste en el navegador: salir de la pantalla o recargar no pierde la venta
+ * en curso. Este hook solo aporta lo que el store no puede saber por sí solo —
+ * el precio de catálogo de la sucursal— y los totales derivados.
+ *
+ * Cada línea oculta con el "ojito" sigue en el carrito pero no cuenta para el
+ * total ni se cobra.
  */
 export function usePosCart({ getPrice }: UsePosCartOptions) {
-  const [lines, setLines] = useState<CartLine[]>([]);
+  const lines = usePosSessionStore((state) => state.lines);
+  const upsertLine = usePosSessionStore((state) => state.upsertLine);
+  const updateLine = usePosSessionStore((state) => state.updateLine);
+  const removeLine = usePosSessionStore((state) => state.removeLine);
+  const toggleLineHidden = usePosSessionStore((state) => state.toggleLineHidden);
+  const replaceLines = usePosSessionStore((state) => state.replaceLines);
+  const clearLines = usePosSessionStore((state) => state.clearLines);
 
   const billable = useMemo(() => billableLines(lines), [lines]);
   const total = useMemo(() => cartTotal(billable), [billable]);
@@ -42,80 +52,41 @@ export function usePosCart({ getPrice }: UsePosCartOptions) {
       const unit = defaultUnit(product);
       if (!unit) return false;
 
-      const unitPrice = getPrice(product.id, unit.id) ?? 0;
-      const key = cartLineKey(product.id, unit.id);
-
-      setLines((prev) => {
-        const existing = prev.find(
-          (line) => cartLineKey(line.product_id, line.product_unit_id) === key,
-        );
-
-        if (existing) {
-          return prev.map((line) =>
-            line.key === existing.key ? { ...line, quantity: line.quantity + 1 } : line,
-          );
-        }
-
-        return [
-          ...prev,
-          {
-            key: nextCartLineKey(),
-            product_id: product.id,
-            product_unit_id: unit.id,
-            product_name: product.name,
-            unit_name: unit.name,
-            quantity: 1,
-            unit_price: unitPrice,
-            is_hidden: false,
-          },
-        ];
+      upsertLine({
+        key: nextCartLineKey(),
+        product_id: product.id,
+        product_unit_id: unit.id,
+        product_name: product.name,
+        unit_name: unit.name,
+        quantity: 1,
+        unit_price: getPrice(product.id, unit.id) ?? 0,
+        is_hidden: false,
       });
 
       return true;
     },
-    [getPrice],
+    [getPrice, upsertLine],
   );
-
-  const updateLine = useCallback((key: string, changes: Partial<CartLine>) => {
-    setLines((prev) => prev.map((line) => (line.key === key ? { ...line, ...changes } : line)));
-  }, []);
 
   /** Cambia la presentación de una línea y refresca su precio de catálogo. */
   const changeUnit = useCallback(
     (line: CartLine, unit: ProductUnit) => {
-      setLines((prev) =>
-        prev.map((current) =>
-          current.key === line.key
-            ? {
-                ...current,
-                product_unit_id: unit.id,
-                unit_name: unit.name,
-                unit_price: getPrice(line.product_id, unit.id) ?? current.unit_price,
-              }
-            : current,
-        ),
-      );
+      updateLine(line.key, {
+        product_unit_id: unit.id,
+        unit_name: unit.name,
+        unit_price: getPrice(line.product_id, unit.id) ?? line.unit_price,
+      });
     },
-    [getPrice],
+    [getPrice, updateLine],
   );
 
-  const removeLine = useCallback((key: string) => {
-    setLines((prev) => prev.filter((line) => line.key !== key));
-  }, []);
-
-  /** Oculta/muestra una línea: oculta no cuenta en el total ni se cobra. */
-  const toggleLineHidden = useCallback((key: string) => {
-    setLines((prev) =>
-      prev.map((line) => (line.key === key ? { ...line, is_hidden: !line.is_hidden } : line)),
-    );
-  }, []);
-
-  const clear = useCallback(() => setLines([]), []);
+  const clear = useCallback(() => clearLines(), [clearLines]);
 
   /** Retoma un ticket en espera: el carrito vuelve con claves nuevas. */
-  const restore = useCallback((parkedLines: ParkedSaleLine[]) => {
-    setLines(fromParkedLines(parkedLines));
-  }, []);
+  const restore = useCallback(
+    (parkedLines: ParkedSaleLine[]) => replaceLines(fromParkedLines(parkedLines)),
+    [replaceLines],
+  );
 
   return {
     lines,
