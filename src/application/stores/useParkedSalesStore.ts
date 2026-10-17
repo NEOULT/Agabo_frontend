@@ -7,6 +7,8 @@ export interface ParkedSaleLine {
   product_unit_id: string;
   product_name: string;
   unit_name: string;
+  /** Unidades base de la presentación (los tickets viejos valen 1). */
+  unit_factor: number;
   quantity: number;
   unit_price: number;
   /** Oculto con el "ojito": no cuenta en el total ni se cobra. */

@@ -19,6 +19,16 @@
 }
 
 @layer components {
+  .loading-spinner {
+    animation: loading-spinner 0.8s linear infinite;
+  }
+
+  @keyframes loading-spinner {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   /*
    * Scrollbar fina y reutilizable (sidebar, contenedores con scroll).
    * `scrollbar-width/color` cubre Firefox; los pseudo-elementos, Chromium/WebKit.
@@ -61,5 +71,9 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .loading-spinner {
+    animation: loading-spinner 1.2s linear infinite !important;
   }
 }

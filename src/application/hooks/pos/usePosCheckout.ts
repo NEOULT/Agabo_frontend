@@ -1,10 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { usePayments } from '@/application/hooks/usePayments';
 import { useSales } from '@/application/hooks/useSales';
 import { useStock } from '@/application/hooks/useStock';
 import { toast } from '@/application/stores/useToastStore';
-import type { CartLine, PosLastSale } from './pos.types';
+import type { CartLine, PosLastSale, PosStockLevels } from './pos.types';
 import { toSaleDetails } from './pos.utils';
 
 interface UsePosCheckoutOptions {
@@ -54,16 +54,26 @@ export function usePosCheckout({
 }: UsePosCheckoutOptions) {
   const { createSale } = useSales();
   const { createPayment } = usePayments();
-  const { fetchAvailability } = useStock();
+  const { fetchAvailableStock } = useStock();
 
   const [isSaving, setIsSaving] = useState(false);
   const [lastSale, setLastSale] = useState<PosLastSale | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  // Existencia del almacén de origen por producto. `null` = sin dato todavía
-  // (sin permiso de inventario o falla la consulta): no bloquea el cobro, el
-  // backend sigue validando la existencia al registrar la venta.
-  const [availability, setAvailability] = useState<Record<string, number> | null>(null);
+  // Existencia del almacén de origen por producto, con desglose por ubicación.
+  // `null` = sin dato todavía (sin permiso de inventario o falla la consulta):
+  // no bloquea el cobro, el backend sigue validando la existencia al registrar
+  // la venta.
+  const [stockLevels, setStockLevels] = useState<PosStockLevels | null>(null);
   const [isStockLoading, setIsStockLoading] = useState(false);
+
+  /** Cantidad disponible por producto (suma de las ubicaciones del almacén). */
+  const availability = useMemo<Record<string, number> | null>(() => {
+    if (!stockLevels) return null;
+
+    return Object.fromEntries(
+      Object.entries(stockLevels).map(([productId, level]) => [productId, level.total]),
+    );
+  }, [stockLevels]);
 
   const canConfirm =
     canSell &&
@@ -75,23 +85,28 @@ export function usePosCheckout({
     amount <= total &&
     !isSaving;
 
-  /** Trae la existencia del almacén de origen para la confirmación del cobro. */
+  /** Trae la existencia del almacén de origen (POS, confirmación y cobro). */
   const loadAvailability = useCallback(async () => {
     if (!warehouseId) {
-      setAvailability(null);
+      setStockLevels(null);
       return;
     }
 
     setIsStockLoading(true);
-    setAvailability(null);
     try {
-      setAvailability(await fetchAvailability(warehouseId, lines.map((line) => line.product_id)));
+      setStockLevels(await fetchAvailableStock(warehouseId));
     } catch {
-      setAvailability(null);
+      setStockLevels(null);
     } finally {
       setIsStockLoading(false);
     }
-  }, [fetchAvailability, lines, warehouseId]);
+  }, [fetchAvailableStock, warehouseId]);
+
+  // Al cambiar de almacén se refresca la existencia: el POS muestra la cantidad
+  // de cada producto antes de cobrar, no solo al abrir la confirmación.
+  useEffect(() => {
+    void loadAvailability();
+  }, [loadAvailability]);
 
   /** Valida el cobro y abre la confirmación con la lista de productos. */
   const requestCheckout = useCallback(() => {
@@ -129,13 +144,20 @@ export function usePosCheckout({
   const confirmCheckout = useCallback(async () => {
     setIsSaving(true);
     try {
+      // Sin existencias cargadas (permiso o consulta fallida) se intenta de
+      // nuevo antes de cobrar: la ubicación de cada línea depende de ellas.
+      const levels =
+        stockLevels ??
+        (await fetchAvailableStock(warehouseId).catch(() => null));
+
       // 1) La venta: el backend calcula el total y genera el movimiento de salida.
+      //    Cada línea se imputa a la ubicación del almacén de donde sale.
       const sale = await createSale({
         branch_id: branchId,
         warehouse_id: warehouseId,
         customer_id: customerId || undefined,
         note: note.trim() || undefined,
-        details: toSaleDetails(lines),
+        details: toSaleDetails(lines, levels),
       });
 
       // 2) El pago en el mismo paso.
@@ -165,6 +187,8 @@ export function usePosCheckout({
           }`,
         );
         setIsConfirmOpen(false);
+        // La venta ya descontó existencia aunque el pago haya fallado.
+        void loadAvailability();
         return;
       }
 
@@ -178,6 +202,8 @@ export function usePosCheckout({
       });
       toast.success(`Venta ${sale.code} cobrada.`);
       setIsConfirmOpen(false);
+      // La venta descontó existencia: el POS debe mostrar la cantidad nueva.
+      void loadAvailability();
     } catch (err) {
       // El backend devuelve mensajes específicos (stock insuficiente, sin precio,
       // padre inactivo, referencia inválida...). La confirmación sigue abierta
@@ -193,6 +219,7 @@ export function usePosCheckout({
     createPayment,
     createSale,
     customerId,
+    fetchAvailableStock,
     lines,
     loadAvailability,
     note,
@@ -201,6 +228,7 @@ export function usePosCheckout({
     paymentCurrencyAmount,
     paymentCurrencyId,
     paymentMethodId,
+    stockLevels,
     warehouseId,
   ]);
 

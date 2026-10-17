@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useRepositories } from '@/application/providers/RepositoryProvider';
+import type { PosStockLevels } from '@/application/hooks/pos/pos.types';
 import type { Stock, CreateStockDTO, UpdateStockDTO } from '@/domain/models';
 import type { StockQueryParams } from '@/domain/repositories';
 
@@ -33,27 +34,32 @@ export function useStock() {
   );
 
   /**
-   * Existencia disponible por producto en un almacén, para cobrar/despachar.
+   * Existencia del almacén de origen indexada por producto, con su desglose por
+   * ubicación (RN-INV-003: una fila por producto + almacén + ubicación).
    *
-   * Una venta del POS no lleva ubicación, e inventory descuenta la fila **sin
-   * ubicación** del almacén (`stock.decrement` compara `location_uuid IS NOT
-   * DISTINCT FROM null`), así que la existencia que cuenta es esa fila: repartir
-   * el total del almacén daría por disponible mercancía que la venta no puede
-   * tomar. Devuelve `{ product_id: cantidad }`.
+   * La cantidad disponible es la **suma de todas las ubicaciones**: una venta
+   * sin ubicación puede tomar mercancía de cualquiera de ellas, así que mirar
+   * solo la fila sin ubicación da por agotado lo que sí está en un estante.
+   * El desglose se conserva para imputar cada línea de la venta a una ubicación
+   * concreta. Se pide el almacén completo en una sola consulta en lugar de una
+   * por producto.
    */
-  const fetchAvailability = useCallback(
-    async (warehouseId: string, productIds: string[]): Promise<Record<string, number>> => {
-      const uniqueIds = [...new Set(productIds)];
+  const fetchAvailableStock = useCallback(
+    async (warehouseId: string): Promise<PosStockLevels> => {
+      const { data } = await stockRepo.getAll({ warehouseId, isActive: true });
 
-      const results = await Promise.all(
-        uniqueIds.map((productId) => stockRepo.getAll({ productId, warehouseId })),
-      );
+      return data.reduce<PosStockLevels>((levels, stock) => {
+        const quantity = Number(stock.quantity);
 
-      return uniqueIds.reduce<Record<string, number>>((availability, productId, index) => {
-        availability[productId] = results[index].data
-          .filter((stock) => !stock.location_id)
-          .reduce((sum, stock) => sum + Number(stock.quantity), 0);
-        return availability;
+        // Las filas en cero no aportan ni se pueden vender.
+        if (!(quantity > 0)) return levels;
+
+        const level = levels[stock.product_id] ?? { total: 0, locations: [] };
+        level.total += quantity;
+        level.locations.push({ location_id: stock.location_id, quantity });
+        levels[stock.product_id] = level;
+
+        return levels;
       }, {});
     },
     [stockRepo],
@@ -100,7 +106,7 @@ export function useStock() {
     isLoading,
     error,
     fetchStocks,
-    fetchAvailability,
+    fetchAvailableStock,
     createStock,
     updateStock,
     activateStock,

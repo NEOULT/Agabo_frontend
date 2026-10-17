@@ -1,6 +1,11 @@
 import { Barcode, Plus } from 'lucide-react';
 import type { Product } from '@/domain/models';
-import { avatarClass, defaultUnit } from '@/application/hooks/pos/pos.utils';
+import {
+  avatarClass,
+  availableInUnits,
+  defaultUnit,
+  formatQuantity,
+} from '@/application/hooks/pos/pos.utils';
 
 interface PosProductResultProps {
   product: Product;
@@ -8,6 +13,11 @@ interface PosProductResultProps {
   getPrice: (productId: string, productUnitId: string) => number | undefined;
   /** Pinta un importe en la moneda de visualización del POS. */
   formatAmount: (valueInBase: number) => string;
+  /**
+   * Existencia del producto en el almacén de origen, en unidades base
+   * (`undefined` = todavía sin dato, por ejemplo sin permiso de inventario).
+   */
+  available?: number;
   onSelect: (product: Product) => void;
 }
 
@@ -16,10 +26,23 @@ export function PosProductResult({
   product,
   getPrice,
   formatAmount,
+  available,
   onSelect,
 }: PosProductResultProps) {
   const unit = defaultUnit(product);
   const price = unit ? getPrice(product.id, unit.id) : undefined;
+  const hasStock = available !== undefined && available > 0;
+  const factor = unit?.factor ?? 1;
+  // La existencia está en unidades base; en una presentación mayor se muestra
+  // cuántas caben y cuántas unidades base quedan.
+  const stockLabel =
+    available === undefined
+      ? null
+      : !hasStock
+        ? 'Sin stock'
+        : factor > 1
+          ? `${formatQuantity(availableInUnits(available, factor))} ${unit?.name} · ${formatQuantity(available)} u. base`
+          : `${formatQuantity(available)} disponibles`;
 
   return (
     <button
@@ -44,6 +67,22 @@ export function PosProductResult({
             </span>
           )}
           {unit && <span className="text-xs text-text-tertiary">· {unit.name}</span>}
+          {stockLabel && (
+            <span
+              title={
+                available === undefined
+                  ? undefined
+                  : `${formatQuantity(available)} unidades base en el almacén de origen`
+              }
+              className={`rounded-md px-1.5 py-0.5 text-xs font-medium ${
+                hasStock
+                  ? 'bg-semantic-success-50 text-semantic-success-700'
+                  : 'bg-semantic-danger-50 text-semantic-danger-700'
+              }`}
+            >
+              {stockLabel}
+            </span>
+          )}
         </span>
       </span>
       <span className="text-sm font-semibold text-text-primary">

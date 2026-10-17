@@ -285,6 +285,13 @@ export function PointOfSalePage() {
 
   const productById = (id: string) => activeProducts.find((p) => p.id === id);
 
+  /**
+   * Existencia del producto en el almacén de origen. Un producto sin fila de
+   * stock está agotado (0); `undefined` es "sin dato" (sin permiso o cargando).
+   */
+  const stockOf = (productId: string): number | undefined =>
+    availability ? (availability[productId] ?? 0) : undefined;
+
   const handleAddProduct = (product: Product) => {
     if (!addProduct(product)) {
       toast.error(`"${product.name}" no tiene presentaciones activas.`);
@@ -519,6 +526,7 @@ export function PointOfSalePage() {
                       product={product}
                       getPrice={getPrice}
                       formatAmount={money}
+                      available={stockOf(product.id)}
                       onSelect={handleAddProduct}
                     />
                   ))
@@ -543,6 +551,7 @@ export function PointOfSalePage() {
                   key={line.key}
                   line={line}
                   product={productById(line.product_id)}
+                  available={stockOf(line.product_id)}
                   baseSymbol={baseFormat.symbol}
                   formatAmount={money}
                   onChangeUnit={handleChangeUnit}

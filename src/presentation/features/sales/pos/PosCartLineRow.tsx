@@ -1,12 +1,22 @@
 import { Eye, EyeOff, Minus, Plus, Trash2 } from 'lucide-react';
 import type { Product } from '@/domain/models';
 import type { CartLine } from '@/application/hooks/pos/pos.types';
-import { activeUnitOptions, avatarClass } from '@/application/hooks/pos/pos.utils';
+import {
+  activeUnitOptions,
+  avatarClass,
+  availableInUnits,
+  formatQuantity,
+} from '@/application/hooks/pos/pos.utils';
 
 interface PosCartLineRowProps {
   line: CartLine;
   /** Producto de la línea: da las presentaciones seleccionables. */
   product?: Product;
+  /**
+   * Existencia del producto en el almacén de origen, en unidades base
+   * (`undefined` = sin dato).
+   */
+  available?: number;
   /** Símbolo de la moneda base, con la que se escribe el precio de la línea. */
   baseSymbol: string;
   /** Pinta un importe en la moneda de visualización del POS. */
@@ -22,6 +32,7 @@ interface PosCartLineRowProps {
 export function PosCartLineRow({
   line,
   product,
+  available,
   baseSymbol,
   formatAmount,
   onChangeUnit,
@@ -62,6 +73,19 @@ export function PosCartLineRow({
           <span className="text-xs text-text-tertiary">
             {line.unit_price > 0 ? `${formatAmount(line.unit_price)} c/u` : 'sin precio'}
           </span>
+          {available !== undefined &&
+            (available > 0 ? (
+              <span
+                className="text-xs text-text-tertiary"
+                title={`${formatQuantity(available)} unidades base en el almacén de origen`}
+              >
+                Disponible: {formatQuantity(availableInUnits(available, line.unit_factor))}
+                {line.unit_factor > 1 &&
+                  ` ${line.unit_name} (${formatQuantity(available)} u. base)`}
+              </span>
+            ) : (
+              <span className="text-xs font-medium text-semantic-danger-700">Sin stock</span>
+            ))}
           {line.is_hidden && (
             <span className="text-xs font-medium text-semantic-warning-700">No cuenta</span>
           )}

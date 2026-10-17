@@ -22,6 +22,13 @@ export interface CartLine {
   product_unit_id: string;
   product_name: string;
   unit_name: string;
+  /**
+   * Unidades base que contiene la presentación (`product_unit_factor_num`):
+   * una "Caja x 12" vale 12. La existencia y el movimiento de inventario se
+   * llevan en unidades base, así que sin este dato una caja descontaría 1.
+   */
+  unit_factor: number;
+  /** Cantidad en la presentación elegida. */
   quantity: number;
   unit_price: number;
   /** Oculto con el "ojito": no cuenta en el total ni se cobra. */
@@ -54,6 +61,27 @@ export interface PosPendingConfirm {
   variant: 'danger' | 'primary';
   run: () => void;
 }
+
+/** Existencia de un producto en una ubicación del almacén de origen. */
+export interface PosStockLocation {
+  /** `location_uuid`; ausente cuando la existencia no está ubicada. */
+  location_id?: string;
+  /** Cantidad en unidades base del producto. */
+  quantity: number;
+}
+
+/** Existencia de un producto en el almacén de origen, por ubicación. */
+export interface PosStockLevel {
+  /**
+   * Suma de todas las ubicaciones, en unidades base: lo que el POS muestra como
+   * disponible. Las presentaciones de un producto comparten esta existencia.
+   */
+  total: number;
+  locations: PosStockLocation[];
+}
+
+/** Existencia del almacén de origen indexada por `product_uuid`. */
+export type PosStockLevels = Record<string, PosStockLevel>;
 
 /** Resumen del cobro que se acaba de registrar. */
 export interface PosLastSale {

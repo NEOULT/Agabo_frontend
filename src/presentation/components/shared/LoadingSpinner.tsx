@@ -13,7 +13,7 @@ export function LoadingSpinner({ size = 'md', label }: LoadingSpinnerProps) {
   return (
     <div className="flex flex-col items-center justify-center py-8 gap-3">
       <svg
-        className={`animate-spin text-brand-600 ${sizeStyles[size]}`}
+        className={`loading-spinner text-brand-600 ${sizeStyles[size]}`}
         viewBox="0 0 24 24"
         fill="none"
       >

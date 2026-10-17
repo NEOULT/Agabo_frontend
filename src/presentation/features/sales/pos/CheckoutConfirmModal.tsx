@@ -2,12 +2,15 @@ import { ShoppingCart } from 'lucide-react';
 import { Modal } from '@/presentation/components/ui/Modal';
 import { Button } from '@/presentation/components/ui/Button';
 import type { PaymentInCurrencyView } from '@/application/hooks/pos/pos.types';
+import { baseQuantity, formatQuantity } from '@/application/hooks/pos/pos.utils';
 
 /** Línea que se muestra en la confirmación (subconjunto del carrito). */
 export interface CheckoutLineView {
   product_id: string;
   product_name: string;
   unit_name: string;
+  /** Unidades base de la presentación vendida (factor). */
+  unit_factor: number;
   quantity: number;
   unit_price: number;
 }
@@ -27,9 +30,9 @@ interface CheckoutConfirmModalProps {
   /** Pinta un importe en la moneda de visualización del POS. */
   formatAmount: (value: number) => string;
   /**
-   * Existencia por producto en el almacén de origen (`null` = todavía sin dato,
-   * por ejemplo si el usuario no tiene permiso de inventario): sin dato no se
-   * bloquea el cobro, el backend sigue validando.
+   * Existencia por producto en el almacén de origen, **en unidades base**
+   * (`null` = todavía sin dato, por ejemplo si el usuario no tiene permiso de
+   * inventario): sin dato no se bloquea el cobro, el backend sigue validando.
    */
   availability: Record<string, number> | null;
   isStockLoading: boolean;
@@ -60,13 +63,14 @@ export function CheckoutConfirmModal({
   isStockLoading,
   paymentInCurrency,
 }: CheckoutConfirmModalProps) {
-  // Cantidad total por producto: el backend descuenta la existencia línea por
-  // línea, así que dos líneas del mismo producto suman sobre la misma fila.
+  // Cantidad total por producto, en unidades base (una caja de 12 son 12): el
+  // backend descuenta la existencia línea por línea, así que dos líneas del
+  // mismo producto suman sobre la misma fila.
   const requiredByProduct = new Map<string, number>();
   for (const line of lines) {
     requiredByProduct.set(
       line.product_id,
-      (requiredByProduct.get(line.product_id) ?? 0) + line.quantity,
+      (requiredByProduct.get(line.product_id) ?? 0) + baseQuantity(line),
     );
   }
 
@@ -117,7 +121,7 @@ export function CheckoutConfirmModal({
         {lines.map((line, index) => {
           const short = availability
             ? (availability[line.product_id] ?? 0) <
-              (requiredByProduct.get(line.product_id) ?? line.quantity)
+              (requiredByProduct.get(line.product_id) ?? baseQuantity(line))
             : false;
 
           return (
@@ -132,12 +136,14 @@ export function CheckoutConfirmModal({
                   {line.product_name}
                 </p>
                 <p className="mt-0.5 text-xs text-text-tertiary">
-                  {line.quantity} {line.unit_name} × {formatAmount(line.unit_price)}
+                  {line.quantity} {line.unit_name}
+                  {line.unit_factor > 1 && ` (${formatQuantity(baseQuantity(line))} u. base)`} ×{' '}
+                  {formatAmount(line.unit_price)}
                   {availability && (
                     <>
                       {' · '}Disponible:{' '}
                       <span className={short ? 'font-medium text-semantic-danger-700' : undefined}>
-                        {availability[line.product_id] ?? 0}
+                        {formatQuantity(availability[line.product_id] ?? 0)} u. base
                       </span>
                     </>
                   )}
@@ -159,7 +165,10 @@ export function CheckoutConfirmModal({
         <p className="mt-3 rounded-lg bg-semantic-danger-50 px-3 py-2 text-xs text-semantic-danger-700">
           No hay existencia suficiente en el almacén de origen:{' '}
           {shortages
-            .map((s) => `${s.name} (necesitas ${s.required}, hay ${s.available})`)
+            .map(
+              (s) =>
+                `${s.name} (necesitas ${formatQuantity(s.required)}, hay ${formatQuantity(s.available)} u. base)`,
+            )
             .join('; ')}
           . Ajusta las cantidades o repón el inventario antes de cobrar.
         </p>

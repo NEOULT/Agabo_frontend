@@ -58,6 +58,7 @@ export function usePosCart({ getPrice }: UsePosCartOptions) {
         product_unit_id: unit.id,
         product_name: product.name,
         unit_name: unit.name,
+        unit_factor: unit.factor,
         quantity: 1,
         unit_price: getPrice(product.id, unit.id) ?? 0,
         is_hidden: false,
@@ -68,12 +69,17 @@ export function usePosCart({ getPrice }: UsePosCartOptions) {
     [getPrice, upsertLine],
   );
 
-  /** Cambia la presentación de una línea y refresca su precio de catálogo. */
+  /**
+   * Cambia la presentación de una línea y refresca su precio de catálogo. La
+   * cantidad no se toca: 2 "Botella" siguen siendo 2, ahora de la presentación
+   * nueva (con su factor para pasar a unidades base).
+   */
   const changeUnit = useCallback(
     (line: CartLine, unit: ProductUnit) => {
       updateLine(line.key, {
         product_unit_id: unit.id,
         unit_name: unit.name,
+        unit_factor: unit.factor,
         unit_price: getPrice(line.product_id, unit.id) ?? line.unit_price,
       });
     },
