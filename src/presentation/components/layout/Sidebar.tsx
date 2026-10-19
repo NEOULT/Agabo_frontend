@@ -12,7 +12,6 @@ import {
   Building2,
   Store,
   Warehouse,
-  MapPin,
   ArrowLeftRight,
   BarChart3,
   ShoppingCart,
@@ -144,13 +143,11 @@ const navGroups: NavGroup[] = [
     permissions: [
       'company.branches:read',
       'company.warehouses:read',
-      'company.locations:read',
       'company.currencies:read',
     ],
     items: [
       { to: '/company/branches', icon: <Store className="h-4 w-4" />, label: 'Sucursales', roles: ['super_admin'], permissions: ['company.branches:read'] },
       { to: '/company/warehouses', icon: <Warehouse className="h-4 w-4" />, label: 'Almacenes', roles: ['super_admin'], permissions: ['company.warehouses:read'] },
-      { to: '/company/locations', icon: <MapPin className="h-4 w-4" />, label: 'Ubicaciones', roles: ['super_admin'], permissions: ['company.locations:read'] },
       { to: '/company/currencies', icon: <Coins className="h-4 w-4" />, label: 'Monedas', roles: ['super_admin'], permissions: ['company.currencies:read'] },
     ],
   },

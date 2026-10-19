@@ -14,7 +14,6 @@ import { usePurchaseReceipts } from '@/application/hooks/usePurchaseReceipts';
 import { useSuppliers } from '@/application/hooks/useSuppliers';
 import { useProducts } from '@/application/hooks/useProducts';
 import { useWarehouses } from '@/application/hooks/useWarehouses';
-import { useLocations } from '@/application/hooks/useLocations';
 import { useBranches } from '@/application/hooks/useBranches';
 import { usePermissions } from '@/application/hooks/usePermissions';
 import { toast } from '@/application/stores/useToastStore';
@@ -26,7 +25,7 @@ import type { PurchaseOrder, PurchaseOrderDetail } from '@/domain/models';
  *
  * La orden es inmutable: aquí no se edita nada. La única acción de escritura
  * es registrar su recepción (RN-PUR-010: una sola vez), que exige un almacén
- * activo de la sucursal de destino y, opcionalmente, una ubicación.
+ * activo de la sucursal de destino.
  */
 export function PurchaseOrderDetailPage() {
   const navigate = useNavigate();
@@ -37,7 +36,6 @@ export function PurchaseOrderDetailPage() {
   const { suppliers, fetchSuppliers } = useSuppliers();
   const { products, fetchProducts } = useProducts();
   const { warehouses, fetchWarehouses } = useWarehouses();
-  const { locations, fetchLocations } = useLocations();
   // Carga las sucursales al montar (el store no se hidrata solo)
   const { branches } = useBranches();
   const { can } = usePermissions();
@@ -50,7 +48,6 @@ export function PurchaseOrderDetailPage() {
 
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [warehouseId, setWarehouseId] = React.useState('');
-  const [locationId, setLocationId] = React.useState('');
   const [note, setNote] = React.useState('');
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = React.useState(false);
@@ -91,12 +88,6 @@ export function PurchaseOrderDetailPage() {
     fetchWarehouses({ branchId: order.branch_id, isActive: true });
   }, [isModalOpen, order, fetchWarehouses]);
 
-  // Las ubicaciones dependen del almacén elegido
-  React.useEffect(() => {
-    if (!warehouseId) return;
-    fetchLocations({ warehouseId, isActive: true });
-  }, [warehouseId, fetchLocations]);
-
   const supplierName = (supplierId: string) =>
     suppliers.find((s) => s.id === supplierId)?.name ?? '—';
   const branchName = (branchId: string) => branches.find((b) => b.id === branchId)?.name ?? '—';
@@ -106,7 +97,6 @@ export function PurchaseOrderDetailPage() {
 
   const openModal = () => {
     setWarehouseId('');
-    setLocationId('');
     setNote('');
     setErrors({});
     setIsModalOpen(true);
@@ -125,7 +115,6 @@ export function PurchaseOrderDetailPage() {
       const receipt = await createReceipt({
         order_id: order.id,
         warehouse_id: warehouseId,
-        location_id: locationId || undefined,
         note: note.trim() || undefined,
       });
       // La recepción cambia el estado derivado de la orden
@@ -304,8 +293,6 @@ export function PurchaseOrderDetailPage() {
             value={warehouseId}
             onChange={(e) => {
               setWarehouseId(e.target.value);
-              // Al cambiar de almacén la ubicación anterior deja de ser válida
-              setLocationId('');
               setErrors({});
             }}
             options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
@@ -317,22 +304,6 @@ export function PurchaseOrderDetailPage() {
             error={errors.warehouse_id || undefined}
             helperText="Solo se listan almacenes activos de la sucursal de destino."
             required
-          />
-
-          <Select
-            label="Ubicación (opcional)"
-            value={locationId}
-            onChange={(e) => setLocationId(e.target.value)}
-            options={locations.map((l) => ({ value: l.id, label: `${l.code} — ${l.name}` }))}
-            placeholder={
-              !warehouseId
-                ? 'Elige primero un almacén'
-                : locations.length === 0
-                  ? 'Sin ubicaciones activas (se usará el almacén)'
-                  : 'Sin ubicación específica'
-            }
-            disabled={!warehouseId}
-            helperText="Si no eliges ubicación, la mercancía ingresa al almacén."
           />
 
           <Textarea

@@ -56,7 +56,6 @@ export class MockPurchaseReceiptRepository implements IPurchaseReceiptRepository
       company_id: MOCK_COMPANY_ID,
       order_id: order.id,
       warehouse_id: data.warehouse_id,
-      location_id: data.location_id,
       code: `REC-${sequence}`,
       note: data.note,
       created_at: now,

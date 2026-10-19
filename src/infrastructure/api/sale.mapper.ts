@@ -6,7 +6,6 @@ export interface ApiSaleDetail {
   sale_detail_uuid: string;
   sale_uuid: string;
   product_uuid: string;
-  location_uuid: string | null;
   sale_detail_quantity_num: number;
   sale_detail_unit_price_num: number;
   sale_detail_line_total_num: number;
@@ -58,7 +57,6 @@ export function toSaleDetail(apiDetail: ApiSaleDetail): SaleDetail {
     id: apiDetail.sale_detail_uuid,
     sale_id: apiDetail.sale_uuid,
     product_id: apiDetail.product_uuid,
-    location_id: apiDetail.location_uuid ?? undefined,
     quantity: apiDetail.sale_detail_quantity_num,
     unit_price: apiDetail.sale_detail_unit_price_num,
     line_total: apiDetail.sale_detail_line_total_num,

@@ -1,10 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeftRight, Eye, Plus, RotateCcw } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Eye, Filter, Plus, RotateCcw, X } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/presentation/components/ui/Card';
 import { Badge } from '@/presentation/components/ui/Badge';
-import { Input } from '@/presentation/components/ui/Input';
 import { Select } from '@/presentation/components/ui/Select';
 import { Modal } from '@/presentation/components/ui/Modal';
 import { Table, type TableColumn } from '@/presentation/components/ui/Table';
@@ -138,6 +137,9 @@ export function MovementsPage() {
   };
 
   const hasFilters = Boolean(warehouseId || movementTypeId || productId || fromDate || toDate);
+  const activeFilterCount = [warehouseId, movementTypeId, productId, fromDate, toDate].filter(
+    Boolean,
+  ).length;
 
   const columns: TableColumn<Movement>[] = [
     {
@@ -220,30 +222,40 @@ export function MovementsPage() {
   ];
 
   return (
-    <div>
-      <CardHeader>
-        <CardTitle>Movimientos de Inventario</CardTitle>
-        {canCreate && (
-          <Button
-            leftIcon={<Plus className="h-4 w-4" />}
-            onClick={() => navigate('/inventory/movements/new')}
-          >
-            Nuevo Movimiento
-          </Button>
+    <div className="flex flex-col lg:h-[calc(100vh-7rem)]">
+      <div className="flex-shrink-0">
+        <CardHeader>
+          <CardTitle>Movimientos de Inventario</CardTitle>
+          {canCreate && (
+            <Button
+              leftIcon={<Plus className="h-4 w-4" />}
+              onClick={() => navigate('/inventory/movements/new')}
+            >
+              Nuevo Movimiento
+            </Button>
+          )}
+        </CardHeader>
+
+        {error && (
+          <div className="mb-4 rounded-lg border border-semantic-danger-200 bg-semantic-danger-50 px-4 py-3 text-sm text-semantic-danger-700">
+            {error}
+          </div>
         )}
-      </CardHeader>
+      </div>
 
-      {error && (
-        <div className="mb-4 rounded-lg border border-semantic-danger-200 bg-semantic-danger-50 px-4 py-3 text-sm text-semantic-danger-700">
-          {error}
-        </div>
-      )}
+      <Card padding="none" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Barra compacta de filtros: una sola fila en escritorio, sin labels.
+            Las fechas viajan juntas en un rango visual. */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle p-3">
+          <span className="hidden items-center gap-1.5 pr-1 text-xs font-semibold uppercase tracking-wider text-text-tertiary sm:flex">
+            <Filter className="h-3.5 w-3.5" />
+            Filtros
+          </span>
 
-      <Card padding="none">
-        <div className="p-4 border-b border-border-subtle grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Select
             value={warehouseId}
             onChange={(e) => setWarehouseId(e.target.value)}
+            className="h-9 !py-0 text-xs"
             options={[
               { value: '', label: 'Todos los almacenes' },
               ...warehouses.map((w) => ({ value: w.id, label: w.name })),
@@ -253,6 +265,7 @@ export function MovementsPage() {
           <Select
             value={movementTypeId}
             onChange={(e) => setMovementTypeId(e.target.value)}
+            className="h-9 !py-0 text-xs"
             options={[
               { value: '', label: 'Todos los tipos' },
               ...movementTypes.map((t) => ({ value: t.id, label: t.name })),
@@ -262,28 +275,42 @@ export function MovementsPage() {
           <Select
             value={productId}
             onChange={(e) => setProductId(e.target.value)}
+            className="h-9 !py-0 text-xs sm:w-52"
             options={[
               { value: '', label: 'Todos los productos' },
               ...products.map((p) => ({ value: p.id, label: p.name })),
             ]}
             aria-label="Filtrar por producto (kardex)"
           />
-          <Input
-            type="date"
-            label="Desde"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-          />
-          <Input
-            type="date"
-            label="Hasta"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-          />
+
+          <div className="flex h-9 items-center gap-1 rounded-lg border border-border-input bg-surface-primary px-2">
+            <CalendarDays className="h-3.5 w-3.5 flex-shrink-0 text-text-muted" />
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="w-[7.5rem] border-0 bg-transparent p-0 text-xs text-text-secondary focus:outline-none"
+              aria-label="Desde"
+            />
+            <span className="text-xs text-text-tertiary">→</span>
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="w-[7.5rem] border-0 bg-transparent p-0 text-xs text-text-secondary focus:outline-none"
+              aria-label="Hasta"
+            />
+          </div>
+
           {hasFilters && (
-            <div className="flex items-end">
+            <>
+              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+                {activeFilterCount} activo{activeFilterCount === 1 ? '' : 's'}
+              </span>
               <Button
                 variant="ghost"
+                size="sm"
+                leftIcon={<X className="h-3.5 w-3.5" />}
                 onClick={() => {
                   setWarehouseId('');
                   setMovementTypeId('');
@@ -292,36 +319,39 @@ export function MovementsPage() {
                   setToDate('');
                 }}
               >
-                Limpiar filtros
+                Limpiar
               </Button>
-            </div>
+            </>
           )}
         </div>
 
-        <Table
-          columns={columns}
-          data={movements}
-          rowKey={(m) => m.id}
-          isLoading={isLoading}
-          emptyState={
-            <EmptyState
-              icon={<ArrowLeftRight className="h-12 w-12" />}
-              title={hasFilters ? 'Sin resultados' : 'No hay movimientos'}
-              description={
-                hasFilters
-                  ? 'No se encontraron movimientos con los filtros aplicados.'
-                  : 'Registra una entrada, salida o transferencia para empezar a mover tu inventario.'
-              }
-              action={
-                !hasFilters && canCreate ? (
-                  <Button onClick={() => navigate('/inventory/movements/new')}>
-                    + Nuevo Movimiento
-                  </Button>
-                ) : undefined
-              }
-            />
-          }
-        />
+        {/* La tabla crece hasta el alto disponible y solo ella hace scroll. */}
+        <div className="scrollbar-thin min-h-0 flex-1 overflow-auto">
+          <Table
+            columns={columns}
+            data={movements}
+            rowKey={(m) => m.id}
+            isLoading={isLoading}
+            emptyState={
+              <EmptyState
+                icon={<ArrowLeftRight className="h-12 w-12" />}
+                title={hasFilters ? 'Sin resultados' : 'No hay movimientos'}
+                description={
+                  hasFilters
+                    ? 'No se encontraron movimientos con los filtros aplicados.'
+                    : 'Registra una entrada, salida o transferencia para empezar a mover tu inventario.'
+                }
+                action={
+                  !hasFilters && canCreate ? (
+                    <Button onClick={() => navigate('/inventory/movements/new')}>
+                      + Nuevo Movimiento
+                    </Button>
+                  ) : undefined
+                }
+              />
+            }
+          />
+        </div>
       </Card>
 
       {/* Detalle del movimiento */}

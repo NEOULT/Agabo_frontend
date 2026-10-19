@@ -56,8 +56,6 @@ export class ApiMovementRepository implements IMovementRepository {
         details: data.details.map((detail) => ({
           product_uuid: detail.product_id,
           lot_uuid: detail.lot_id ?? null,
-          origin_location_uuid: detail.origin_location_id ?? null,
-          destination_location_uuid: detail.destination_location_id ?? null,
           movement_detail_quantity_num: detail.quantity,
         })),
       });

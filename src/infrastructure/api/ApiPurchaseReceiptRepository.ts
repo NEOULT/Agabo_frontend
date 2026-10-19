@@ -55,7 +55,6 @@ export class ApiPurchaseReceiptRepository implements IPurchaseReceiptRepository 
       const { data: created } = await api.post<ApiPurchaseReceipt>('/purchase-receipts', {
         purchase_order_uuid: data.order_id,
         warehouse_uuid: data.warehouse_id,
-        location_uuid: data.location_id ?? null,
         purchase_receipt_note_text: data.note ?? null,
       });
       return toPurchaseReceipt(created);

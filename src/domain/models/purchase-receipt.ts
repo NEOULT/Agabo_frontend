@@ -22,8 +22,6 @@ export interface PurchaseReceipt {
   order_id: string;
   /** warehouse_uuid — almacén donde ingresó la mercancía */
   warehouse_id: string;
-  /** location_uuid — ubicación de destino dentro del almacén (opcional) */
-  location_id?: string;
   /** purchase_receipt_code_text — generado por el backend */
   code: string;
   /** purchase_receipt_note_text */
@@ -37,6 +35,5 @@ export interface PurchaseReceipt {
 export interface CreatePurchaseReceiptDTO {
   order_id: string;
   warehouse_id: string;
-  location_id?: string;
   note?: string;
 }

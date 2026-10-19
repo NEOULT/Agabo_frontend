@@ -2,7 +2,7 @@
  * 📦 Existencias de inventario (`inventory.stock`).
  *
  * Alineada al contrato (`docs/schema-inventory/api-contract-stock.md`):
- * - Existe una sola existencia por producto, almacén y ubicación (RN-INV-003).
+ * - Existe una sola existencia por producto y almacén (RN-INV-003).
  * - El desglose por lote (`inventory.stock_lot`) viaja anidado y solo se
  *   consulta: lo actualizan los movimientos que manejan lotes (RF-INV-017).
  */
@@ -17,13 +17,12 @@ export interface StockLot {
   updated_at: string;
 }
 
-/** Existencia disponible de un producto en un almacén (y ubicación). */
+/** Existencia disponible de un producto en un almacén. */
 export interface Stock {
   id: string;
   company_id: string;
   product_id: string;
   warehouse_id: string;
-  location_id?: string;
   quantity: number;
   is_active: boolean;
   created_at: string;
@@ -31,14 +30,43 @@ export interface Stock {
   lots: StockLot[];
 }
 
+/** Existencia con los nombres resueltos para la pantalla de gestión. */
+export interface StockOverviewItem extends Stock {
+  product_name: string;
+  product_is_active: boolean;
+  warehouse_name: string;
+  warehouse_is_active: boolean;
+  branch_id: string;
+  branch_name: string;
+}
+
+export interface StockProductOption {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
+
+export interface StockWarehouseOption {
+  id: string;
+  name: string;
+  is_active: boolean;
+  branch_id: string;
+  branch_name: string;
+}
+
+/** Respuesta de `GET /api/stocks/overview`: todo lo que necesita la pantalla. */
+export interface StockOverview {
+  items: StockOverviewItem[];
+  products: StockProductOption[];
+  warehouses: StockWarehouseOption[];
+}
+
 export interface CreateStockDTO {
   product_id: string;
   warehouse_id: string;
-  location_id?: string | null;
   quantity: number;
 }
 
 export interface UpdateStockDTO {
   quantity?: number;
-  location_id?: string | null;
 }

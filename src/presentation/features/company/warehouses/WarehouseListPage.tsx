@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Warehouse as WarehouseIcon, Pencil, Power, MapPin } from 'lucide-react';
+import { Plus, Warehouse as WarehouseIcon, Pencil, Power } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/presentation/components/ui/Card';
 import { Badge } from '@/presentation/components/ui/Badge';
@@ -112,13 +112,6 @@ export function WarehouseListPage() {
       align: 'right',
       cell: (w) => (
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={() => navigate(`/company/locations?warehouse=${w.id}`)}
-            className="p-2 rounded-lg text-text-muted hover:text-brand-600 hover:bg-surface-tertiary transition-colors"
-            title="Ver ubicaciones"
-          >
-            <MapPin className="h-4 w-4" />
-          </button>
           {canUpdate && (
             <button
               onClick={() => navigate(`/company/warehouses/${w.id}/edit`)}

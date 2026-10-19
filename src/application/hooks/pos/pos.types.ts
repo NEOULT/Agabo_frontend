@@ -56,23 +56,8 @@ export interface PosPendingConfirm {
   run: () => void;
 }
 
-/** Existencia de un producto en una ubicación del almacén de origen. */
-export interface PosStockLocation {
-  /** `location_uuid`; ausente cuando la existencia no está ubicada. */
-  location_id?: string;
-  /** Cantidad en unidades base del producto. */
-  quantity: number;
-}
-
-/** Existencia de un producto en el almacén de origen, por ubicación. */
-export interface PosStockLevel {
-  /** Suma de todas las ubicaciones, en unidades base del producto. */
-  total: number;
-  locations: PosStockLocation[];
-}
-
-/** Existencia del almacén de origen indexada por `product_uuid`. */
-export type PosStockLevels = Record<string, PosStockLevel>;
+/** Existencia del almacén de origen indexada por `product_uuid`, en unidades base. */
+export type PosStockLevels = Record<string, number>;
 
 /** Resumen del cobro que se acaba de registrar. */
 export interface PosLastSale {

@@ -6,8 +6,6 @@ export interface ApiMovementDetail {
   inventory_movement_uuid: string;
   product_uuid: string;
   lot_uuid: string | null;
-  origin_location_uuid: string | null;
-  destination_location_uuid: string | null;
   movement_detail_quantity_num: number;
   movement_detail_created_at_tsz: string;
 }
@@ -41,8 +39,6 @@ export function toMovementDetail(apiDetail: ApiMovementDetail): MovementDetail {
     movement_id: apiDetail.inventory_movement_uuid,
     product_id: apiDetail.product_uuid,
     lot_id: apiDetail.lot_uuid ?? undefined,
-    origin_location_id: apiDetail.origin_location_uuid ?? undefined,
-    destination_location_id: apiDetail.destination_location_uuid ?? undefined,
     quantity: apiDetail.movement_detail_quantity_num,
     created_at: apiDetail.movement_detail_created_at_tsz,
   };

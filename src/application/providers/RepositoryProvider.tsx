@@ -15,7 +15,6 @@ import type {
   IPaymentRepository,
   IBranchRepository,
   IWarehouseRepository,
-  ILocationRepository,
   ICurrencyRepository,
   IMovementRepository,
   IAuthRepository,
@@ -30,7 +29,6 @@ import type {
 import { ApiAuthRepository } from '@/infrastructure/api/ApiAuthRepository';
 import { ApiBranchRepository } from '@/infrastructure/api/ApiBranchRepository';
 import { ApiWarehouseRepository } from '@/infrastructure/api/ApiWarehouseRepository';
-import { ApiLocationRepository } from '@/infrastructure/api/ApiLocationRepository';
 import { ApiCurrencyRepository } from '@/infrastructure/api/ApiCurrencyRepository';
 import { ApiSupplierRepository } from '@/infrastructure/api/ApiSupplierRepository';
 import { ApiPriceListRepository } from '@/infrastructure/api/ApiPriceListRepository';
@@ -69,7 +67,6 @@ export interface Repositories {
   payments: IPaymentRepository;
   branches: IBranchRepository;
   warehouses: IWarehouseRepository;
-  locations: ILocationRepository;
   currencies: ICurrencyRepository;
   movements: IMovementRepository;
   movementTypes: IMovementTypeRepository;
@@ -82,7 +79,7 @@ export interface Repositories {
 }
 
 /**
- * Auth, company (branches/warehouses/locations), purchases
+ * Auth, company (branches/warehouses), purchases
  * (suppliers/orders/receipts), sales (customers/payment_methods/sales/payments),
  * el catálogo (products/units/categories/brands) y el inventario
  * (movements/movement types/stocks) consumen el backend Express real.
@@ -103,7 +100,6 @@ const repositories: Repositories = {
   payments: new ApiPaymentRepository(),
   branches: new ApiBranchRepository(),
   warehouses: new ApiWarehouseRepository(),
-  locations: new ApiLocationRepository(),
   currencies: new ApiCurrencyRepository(),
   movements: new ApiMovementRepository(),
   movementTypes: new ApiMovementTypeRepository(),

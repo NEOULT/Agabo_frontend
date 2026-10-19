@@ -7,8 +7,8 @@
  *   almacenes de la cabecera (RN-INV-007).
  * - `inventory.inventory_movement`: la cabecera, inmutable una vez registrada
  *   (RN-INV-010). Lleva almacén de origen y/o destino.
- * - `inventory.movement_detail`: las líneas (producto, lote, ubicaciones y
- *   cantidad) que viajan anidadas en el movimiento.
+ * - `inventory.movement_detail`: las líneas (producto, lote y cantidad) que
+ *   viajan anidadas en el movimiento.
  */
 
 /** Propósito reservado del tipo de movimiento (a lo sumo uno por empresa). */
@@ -45,8 +45,6 @@ export interface MovementDetail {
   movement_id: string;
   product_id: string;
   lot_id?: string;
-  origin_location_id?: string;
-  destination_location_id?: string;
   quantity: number;
   created_at: string;
 }
@@ -74,8 +72,6 @@ export interface Movement {
 export interface CreateMovementDetailDTO {
   product_id: string;
   lot_id?: string | null;
-  origin_location_id?: string | null;
-  destination_location_id?: string | null;
   quantity: number;
 }
 

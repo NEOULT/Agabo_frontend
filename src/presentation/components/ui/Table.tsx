@@ -19,6 +19,10 @@ interface TableProps<T> {
   rowKey: (row: T) => string;
   /** Se dispara al hacer clic en una fila (para navegar al detalle). */
   onRowClick?: (row: T) => void;
+  /** Contenido que se muestra debajo de la fila cuando está expandida. */
+  expandedRow?: (row: T) => React.ReactNode;
+  /** Indica si la fila debe mostrar su contenido expandido. */
+  isRowExpanded?: (row: T) => boolean;
   isLoading?: boolean;
   emptyState?: React.ReactNode;
 }
@@ -34,6 +38,8 @@ export function Table<T>({
   data,
   rowKey,
   onRowClick,
+  expandedRow,
+  isRowExpanded,
   isLoading = false,
   emptyState,
 }: TableProps<T>) {
@@ -72,22 +78,30 @@ export function Table<T>({
         </thead>
         <tbody className="divide-y divide-border-subtle">
           {data.map((row) => (
-            <tr
-              key={rowKey(row)}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
-              className={`transition-colors ${onRowClick ? 'hover:bg-surface-secondary cursor-pointer' : ''}`}
-            >
-              {columns.map((column) => (
-                <td
-                  key={column.key}
-                  className={`px-4 py-3 text-sm ${alignStyles[column.align ?? 'left']} ${column.className ?? ''}`}
-                >
-                  {column.cell
-                    ? column.cell(row)
-                    : String((row as Record<string, unknown>)[column.key] ?? '—')}
-                </td>
-              ))}
-            </tr>
+            <React.Fragment key={rowKey(row)}>
+              <tr
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                className={`transition-colors ${onRowClick ? 'hover:bg-surface-secondary cursor-pointer' : ''}`}
+              >
+                {columns.map((column) => (
+                  <td
+                    key={column.key}
+                    className={`px-4 py-3 text-sm ${alignStyles[column.align ?? 'left']} ${column.className ?? ''}`}
+                  >
+                    {column.cell
+                      ? column.cell(row)
+                      : String((row as Record<string, unknown>)[column.key] ?? '—')}
+                  </td>
+                ))}
+              </tr>
+              {expandedRow && isRowExpanded?.(row) && (
+                <tr className="bg-surface-secondary/50">
+                  <td colSpan={columns.length} className="px-4 py-3">
+                    {expandedRow(row)}
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
           ))}
         </tbody>
       </table>

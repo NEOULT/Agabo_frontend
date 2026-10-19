@@ -30,14 +30,17 @@ export type {
 export type { IPaymentRepository, PaymentQueryParams } from './IPaymentRepository';
 export type { IBranchRepository, BranchQueryParams } from './IBranchRepository';
 export type { IWarehouseRepository, WarehouseQueryParams } from './IWarehouseRepository';
-export type { ILocationRepository, LocationQueryParams } from './ILocationRepository';
 export type { ICurrencyRepository, CurrencyQueryParams } from './ICurrencyRepository';
 export type { IMovementRepository, MovementQueryParams } from './IMovementRepository';
 export type {
   IMovementTypeRepository,
   MovementTypeQueryParams,
 } from './IMovementTypeRepository';
-export type { IStockRepository, StockQueryParams } from './IStockRepository';
+export type {
+  IStockRepository,
+  StockQueryParams,
+  StockOverviewParams,
+} from './IStockRepository';
 export type { IScanSessionRepository } from './IScanSessionRepository';
 export type { IAuthRepository } from './IAuthRepository';
 export type { IUserRepository, UserQueryParams } from './IUserRepository';

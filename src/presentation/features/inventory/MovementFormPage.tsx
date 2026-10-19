@@ -10,17 +10,14 @@ import { useInventory } from '@/application/hooks/useInventory';
 import { useMovementTypes } from '@/application/hooks/useMovementTypes';
 import { useWarehouses } from '@/application/hooks/useWarehouses';
 import { useProducts } from '@/application/hooks/useProducts';
-import { useLocations } from '@/application/hooks/useLocations';
 import { useBranchStore } from '@/application/stores/useBranchStore';
 import { toast } from '@/application/stores/useToastStore';
-import type { CreateMovementDetailDTO, Location } from '@/domain/models';
+import type { CreateMovementDetailDTO } from '@/domain/models';
 
 interface LineState {
   key: string;
   productId: string;
   quantity: string;
-  originLocationId: string;
-  destinationLocationId: string;
 }
 
 let lineCounter = 0;
@@ -30,8 +27,6 @@ function newLine(): LineState {
     key: `line-${Date.now()}-${lineCounter}`,
     productId: '',
     quantity: '1',
-    originLocationId: '',
-    destinationLocationId: '',
   };
 }
 
@@ -44,9 +39,8 @@ const PURPOSE_LABEL: Record<string, string> = {
  * Registro de un movimiento de inventario (RF-INV-014).
  *
  * La dirección surge de los almacenes (RN-INV-007): solo destino es entrada,
- * solo origen es salida y ambos es transferencia. Cada línea lleva su producto,
- * cantidad y, opcionalmente, la ubicación de origen/destino dentro de su
- * almacén (RN-INV-011).
+ * solo origen es salida y ambos es transferencia. Cada línea lleva su producto
+ * y su cantidad.
  */
 export function MovementFormPage() {
   const navigate = useNavigate();
@@ -54,7 +48,6 @@ export function MovementFormPage() {
   const { movementTypes, fetchMovementTypes } = useMovementTypes();
   const { warehouses, fetchWarehouses } = useWarehouses();
   const { products, fetchProducts } = useProducts();
-  const { fetchLocations } = useLocations();
   const activeBranch = useBranchStore((s) => s.activeBranch);
 
   const [movementTypeId, setMovementTypeId] = React.useState('');
@@ -66,9 +59,6 @@ export function MovementFormPage() {
   const [isSaving, setIsSaving] = React.useState(false);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
-  const [originLocations, setOriginLocations] = React.useState<Location[]>([]);
-  const [destinationLocations, setDestinationLocations] = React.useState<Location[]>([]);
-
   React.useEffect(() => {
     fetchMovementTypes({ isActive: true });
     fetchProducts({ isActive: true });
@@ -77,35 +67,6 @@ export function MovementFormPage() {
   React.useEffect(() => {
     fetchWarehouses({ branchId: activeBranch?.id || undefined });
   }, [fetchWarehouses, activeBranch?.id]);
-
-  // Ubicaciones del almacén de origen / destino seleccionados
-  React.useEffect(() => {
-    if (!originWarehouseId) {
-      setOriginLocations([]);
-      return;
-    }
-    let cancelled = false;
-    fetchLocations({ warehouseId: originWarehouseId, isActive: true }).then((data) => {
-      if (!cancelled) setOriginLocations(data);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [originWarehouseId, fetchLocations]);
-
-  React.useEffect(() => {
-    if (!destinationWarehouseId) {
-      setDestinationLocations([]);
-      return;
-    }
-    let cancelled = false;
-    fetchLocations({ warehouseId: destinationWarehouseId, isActive: true }).then((data) => {
-      if (!cancelled) setDestinationLocations(data);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [destinationWarehouseId, fetchLocations]);
 
   const activeWarehouses = React.useMemo(
     () => warehouses.filter((w) => w.is_active),
@@ -142,8 +103,6 @@ export function MovementFormPage() {
       details.push({
         product_id: line.productId,
         quantity,
-        origin_location_id: line.originLocationId || null,
-        destination_location_id: line.destinationLocationId || null,
       });
     });
 
@@ -276,32 +235,6 @@ export function MovementFormPage() {
                       onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
                       required
                     />
-                    {originWarehouseId && (
-                      <Select
-                        label="Ubicación de origen"
-                        value={line.originLocationId}
-                        onChange={(e) =>
-                          updateLine(line.key, { originLocationId: e.target.value })
-                        }
-                        options={[
-                          { value: '', label: 'Sin ubicación (opcional)' },
-                          ...originLocations.map((l) => ({ value: l.id, label: l.name })),
-                        ]}
-                      />
-                    )}
-                    {destinationWarehouseId && (
-                      <Select
-                        label="Ubicación de destino"
-                        value={line.destinationLocationId}
-                        onChange={(e) =>
-                          updateLine(line.key, { destinationLocationId: e.target.value })
-                        }
-                        options={[
-                          { value: '', label: 'Sin ubicación (opcional)' },
-                          ...destinationLocations.map((l) => ({ value: l.id, label: l.name })),
-                        ]}
-                      />
-                    )}
                   </div>
                   {lines.length > 1 && (
                     <button

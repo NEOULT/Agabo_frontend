@@ -1,16 +1,28 @@
-import type { IStockRepository, StockQueryParams } from '@/domain/repositories';
-import type { Stock, CreateStockDTO, UpdateStockDTO } from '@/domain/models';
+import type {
+  IStockRepository,
+  StockOverviewParams,
+  StockQueryParams,
+} from '@/domain/repositories';
+import type { Stock, StockOverview, CreateStockDTO, UpdateStockDTO } from '@/domain/models';
 import { api } from './client';
 import { toApiError } from './errors';
-import { toStock, type ApiStock, type ApiStockListResponse } from './stock.mapper';
+import {
+  toStock,
+  toStockOverviewItem,
+  toStockProductOption,
+  toStockWarehouseOption,
+  type ApiStock,
+  type ApiStockListResponse,
+  type ApiStockOverviewResponse,
+} from './stock.mapper';
 
 /**
  * Implementación REST de `inventory.stock` contra el backend Express
  * (ver `docs/schema-inventory/api-contract-stock.md` §2).
  *
- * Solo puede existir una existencia por producto, almacén y ubicación
- * (RN-INV-003). No hay `delete`: se desactiva, y el backend lo rechaza si
- * queda cantidad mayor que cero.
+ * Solo puede existir una existencia por producto y almacén (RN-INV-003).
+ * No hay `delete`: se desactiva, y el backend lo rechaza si queda cantidad
+ * mayor que cero.
  */
 export class ApiStockRepository implements IStockRepository {
   async getAll(params?: StockQueryParams): Promise<{ data: Stock[]; total: number }> {
@@ -18,12 +30,33 @@ export class ApiStockRepository implements IStockRepository {
       const query: Record<string, string> = {};
       if (params?.productId) query.product_uuid = params.productId;
       if (params?.warehouseId) query.warehouse_uuid = params.warehouseId;
-      if (params?.locationId) query.location_uuid = params.locationId;
       if (params?.isActive !== undefined) query.stock_is_active_bl = String(params.isActive);
 
       const { data } = await api.get<ApiStockListResponse>('/stocks', { params: query });
 
       return { data: data.items.map(toStock), total: data.items.length };
+    } catch (error) {
+      throw toApiError(error);
+    }
+  }
+
+  async getOverview(params?: StockOverviewParams): Promise<StockOverview> {
+    try {
+      const query: Record<string, string> = {};
+      if (params?.productId) query.product_uuid = params.productId;
+      if (params?.warehouseId) query.warehouse_uuid = params.warehouseId;
+      if (params?.branchId) query.branch_uuid = params.branchId;
+      if (params?.isActive !== undefined) query.stock_is_active_bl = String(params.isActive);
+
+      const { data } = await api.get<ApiStockOverviewResponse>('/stocks/overview', {
+        params: query,
+      });
+
+      return {
+        items: data.items.map(toStockOverviewItem),
+        products: data.products.map(toStockProductOption),
+        warehouses: data.warehouses.map(toStockWarehouseOption),
+      };
     } catch (error) {
       throw toApiError(error);
     }
@@ -46,7 +79,6 @@ export class ApiStockRepository implements IStockRepository {
       const { data: created } = await api.post<ApiStock>('/stocks', {
         product_uuid: data.product_id,
         warehouse_uuid: data.warehouse_id,
-        location_uuid: data.location_id ?? null,
         stock_quantity_num: data.quantity,
       });
       return toStock(created);
@@ -60,7 +92,6 @@ export class ApiStockRepository implements IStockRepository {
       // product_uuid y warehouse_uuid no son editables (RF-INV-011).
       const payload: Record<string, number | string | null> = {};
       if (data.quantity !== undefined) payload.stock_quantity_num = data.quantity;
-      if (data.location_id !== undefined) payload.location_uuid = data.location_id;
 
       const { data: updated } = await api.patch<ApiStock>(`/stocks/${id}`, payload);
       return toStock(updated);

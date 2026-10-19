@@ -59,21 +59,17 @@ export function usePosCheckout({
   const [isSaving, setIsSaving] = useState(false);
   const [lastSale, setLastSale] = useState<PosLastSale | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  // Existencia del almacén de origen por producto, con desglose por ubicación.
-  // `null` = sin dato todavía (sin permiso de inventario o falla la consulta):
-  // no bloquea el cobro, el backend sigue validando la existencia al registrar
-  // la venta.
+  // Existencia del almacén de origen por producto. `null` = sin dato todavía
+  // (sin permiso de inventario o falla la consulta): no bloquea el cobro, el
+  // backend sigue validando la existencia al registrar la venta.
   const [stockLevels, setStockLevels] = useState<PosStockLevels | null>(null);
   const [isStockLoading, setIsStockLoading] = useState(false);
 
-  /** Cantidad disponible por producto (suma de las ubicaciones del almacén). */
-  const availability = useMemo<Record<string, number> | null>(() => {
-    if (!stockLevels) return null;
-
-    return Object.fromEntries(
-      Object.entries(stockLevels).map(([productId, level]) => [productId, level.total]),
-    );
-  }, [stockLevels]);
+  /** Cantidad disponible por producto, en unidades base. */
+  const availability = useMemo<Record<string, number> | null>(
+    () => stockLevels,
+    [stockLevels],
+  );
 
   const canConfirm =
     canSell &&
@@ -144,20 +140,13 @@ export function usePosCheckout({
   const confirmCheckout = useCallback(async () => {
     setIsSaving(true);
     try {
-      // Sin existencias cargadas (permiso o consulta fallida) se intenta de
-      // nuevo antes de cobrar: la ubicación de cada línea depende de ellas.
-      const levels =
-        stockLevels ??
-        (await fetchAvailableStock(warehouseId).catch(() => null));
-
       // 1) La venta: el backend calcula el total y genera el movimiento de salida.
-      //    Cada línea se imputa a la ubicación del almacén de donde sale.
       const sale = await createSale({
         branch_id: branchId,
         warehouse_id: warehouseId,
         customer_id: customerId || undefined,
         note: note.trim() || undefined,
-        details: toSaleDetails(lines, levels),
+        details: toSaleDetails(lines),
       });
 
       // 2) El pago en el mismo paso.
@@ -219,7 +208,6 @@ export function usePosCheckout({
     createPayment,
     createSale,
     customerId,
-    fetchAvailableStock,
     lines,
     loadAvailability,
     note,
@@ -228,7 +216,6 @@ export function usePosCheckout({
     paymentCurrencyAmount,
     paymentCurrencyId,
     paymentMethodId,
-    stockLevels,
     warehouseId,
   ]);
 

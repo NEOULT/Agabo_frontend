@@ -66,7 +66,6 @@ export class ApiSaleRepository implements ISaleRepository {
         sale_note_text: data.note ?? null,
         details: data.details.map((line) => ({
           product_uuid: line.product_id,
-          location_uuid: line.location_id ?? null,
           sale_detail_quantity_num: line.quantity,
           // Si se omite, el backend propone el precio desde catalog.price_product.
           sale_detail_unit_price_num: line.unit_price ?? null,

@@ -19,6 +19,11 @@ export function formatCurrency(
   return `${symbol} ${formatted}`;
 }
 
+/** Formatea una cantidad de inventario (hasta 4 decimales). */
+export function formatQuantity(value: number): string {
+  return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 4 }).format(value);
+}
+
 /** Formatea una fecha ISO a formato legible */
 export function formatDate(isoString: string): string {
   return new Intl.DateTimeFormat('es-CO', {

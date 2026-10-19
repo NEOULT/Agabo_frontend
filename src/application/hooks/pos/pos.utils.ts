@@ -1,6 +1,6 @@
 import type { ParkedSaleLine } from '@/application/stores/useParkedSalesStore';
 import type { CreateSaleDetailDTO, Product } from '@/domain/models';
-import type { CartLine, PosStockLevel, PosStockLevels } from './pos.types';
+import type { CartLine } from './pos.types';
 
 /**
  * Utilidades puras del punto de venta.
@@ -91,78 +91,15 @@ export function cartItemsCount(lines: CartLine[]): number {
 }
 
 /**
- * Reparte una línea del carrito entre las ubicaciones del almacén de origen.
- *
- * La venta descuenta la existencia de la ubicación que indica la línea
- * (`stock.decrement` compara `location_uuid`), así que una línea sin ubicación
- * no encuentra la mercancía guardada en un estante. Se toma primero de la
- * ubicación con más existencia y, si hace falta, se parte en varias líneas del
- * mismo producto: el backend descuenta cada una de su ubicación.
- *
- * La cantidad de la línea ya está en la unidad base del producto, igual que la
- * existencia, así que el reparto se hace directamente.
+ * Detalle que viaja al backend al registrar la venta (RN-SAL-009), en la
+ * unidad base del producto.
  */
-function allocateLine(
-  line: CartLine,
-  level: PosStockLevel | undefined,
-): CreateSaleDetailDTO[] {
-  const base = {
+export function toSaleDetails(lines: CartLine[]): CreateSaleDetailDTO[] {
+  return lines.map((line) => ({
     product_id: line.product_id,
+    quantity: line.quantity,
     unit_price: line.unit_price,
-  };
-
-  // Sin dato de existencias (sin permiso de inventario o consulta fallida) se
-  // envía la línea sin ubicación y el backend sigue validando la existencia.
-  if (!level || level.locations.length === 0) {
-    return [{ ...base, quantity: line.quantity }];
-  }
-
-  const byQuantity = [...level.locations].sort((a, b) => b.quantity - a.quantity);
-  const details: CreateSaleDetailDTO[] = [];
-  let remaining = line.quantity;
-
-  for (const location of byQuantity) {
-    if (remaining <= 0) break;
-
-    const take = Math.min(location.quantity, remaining);
-    details.push({
-      ...base,
-      location_id: location.location_id,
-      quantity: roundQuantity(take),
-    });
-    remaining = roundQuantity(remaining - take);
-  }
-
-  // No alcanza: el resto viaja igual para que el backend rechace la venta con
-  // `insufficient_stock` (la confirmación ya lo advierte antes de cobrar).
-  if (remaining > 0) {
-    details.push({
-      ...base,
-      location_id: byQuantity[0].location_id,
-      quantity: roundQuantity(remaining),
-    });
-  }
-
-  return details;
-}
-
-/**
- * Detalle que viaja al backend al registrar la venta (RN-SAL-009), imputado a
- * las ubicaciones del almacén de origen y en la unidad base del producto.
- */
-export function toSaleDetails(
-  lines: CartLine[],
-  stock?: PosStockLevels | null,
-): CreateSaleDetailDTO[] {
-  if (!stock) {
-    return lines.map((line) => ({
-      product_id: line.product_id,
-      quantity: line.quantity,
-      unit_price: line.unit_price,
-    }));
-  }
-
-  return lines.flatMap((line) => allocateLine(line, stock[line.product_id]));
+  }));
 }
 
 /** Líneas que se guardan en un ticket en espera (sin la clave de React). */
