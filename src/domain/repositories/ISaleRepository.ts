@@ -29,7 +29,6 @@ export interface SaleQueryParams {
 export interface SaleDetailQueryParams {
   saleId?: string;
   productId?: string;
-  productUnitId?: string;
   fromDate?: string;
   toDate?: string;
 }

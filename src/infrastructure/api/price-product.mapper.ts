@@ -5,7 +5,6 @@ export interface ApiPriceProduct {
   price_product_uuid: string;
   price_list_uuid: string;
   product_uuid: string;
-  product_unit_uuid: string;
   price_product_price_num: number;
   price_product_is_active_bl: boolean;
   price_product_created_at_tsz: string;
@@ -24,7 +23,6 @@ export function toPriceProduct(apiPriceProduct: ApiPriceProduct): PriceProduct {
     id: apiPriceProduct.price_product_uuid,
     price_list_id: apiPriceProduct.price_list_uuid,
     product_id: apiPriceProduct.product_uuid,
-    product_unit_id: apiPriceProduct.product_unit_uuid,
     price: apiPriceProduct.price_product_price_num,
     is_active: apiPriceProduct.price_product_is_active_bl,
     created_at: apiPriceProduct.price_product_created_at_tsz,

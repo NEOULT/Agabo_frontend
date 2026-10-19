@@ -23,7 +23,6 @@ export interface PurchaseOrderQueryParams {
 export interface PurchaseOrderDetailQueryParams {
   orderId?: string;
   productId?: string;
-  productUnitId?: string;
   fromDate?: string;
   toDate?: string;
 }

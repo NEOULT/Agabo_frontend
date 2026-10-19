@@ -2,15 +2,13 @@ import { ShoppingCart } from 'lucide-react';
 import { Modal } from '@/presentation/components/ui/Modal';
 import { Button } from '@/presentation/components/ui/Button';
 import type { PaymentInCurrencyView } from '@/application/hooks/pos/pos.types';
-import { baseQuantity, formatQuantity } from '@/application/hooks/pos/pos.utils';
+import { formatQuantity } from '@/application/hooks/pos/pos.utils';
 
 /** Línea que se muestra en la confirmación (subconjunto del carrito). */
 export interface CheckoutLineView {
   product_id: string;
   product_name: string;
   unit_name: string;
-  /** Unidades base de la presentación vendida (factor). */
-  unit_factor: number;
   quantity: number;
   unit_price: number;
 }
@@ -63,14 +61,14 @@ export function CheckoutConfirmModal({
   isStockLoading,
   paymentInCurrency,
 }: CheckoutConfirmModalProps) {
-  // Cantidad total por producto, en unidades base (una caja de 12 son 12): el
-  // backend descuenta la existencia línea por línea, así que dos líneas del
-  // mismo producto suman sobre la misma fila.
+  // Cantidad total por producto, en su unidad base: el backend descuenta la
+  // existencia línea por línea, así que dos líneas del mismo producto suman
+  // sobre la misma fila.
   const requiredByProduct = new Map<string, number>();
   for (const line of lines) {
     requiredByProduct.set(
       line.product_id,
-      (requiredByProduct.get(line.product_id) ?? 0) + baseQuantity(line),
+      (requiredByProduct.get(line.product_id) ?? 0) + line.quantity,
     );
   }
 
@@ -121,7 +119,7 @@ export function CheckoutConfirmModal({
         {lines.map((line, index) => {
           const short = availability
             ? (availability[line.product_id] ?? 0) <
-              (requiredByProduct.get(line.product_id) ?? baseQuantity(line))
+              (requiredByProduct.get(line.product_id) ?? line.quantity)
             : false;
 
           return (
@@ -136,9 +134,7 @@ export function CheckoutConfirmModal({
                   {line.product_name}
                 </p>
                 <p className="mt-0.5 text-xs text-text-tertiary">
-                  {line.quantity} {line.unit_name}
-                  {line.unit_factor > 1 && ` (${formatQuantity(baseQuantity(line))} u. base)`} ×{' '}
-                  {formatAmount(line.unit_price)}
+                  {line.quantity} {line.unit_name} × {formatAmount(line.unit_price)}
                   {availability && (
                     <>
                       {' · '}Disponible:{' '}

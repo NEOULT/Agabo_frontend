@@ -122,8 +122,6 @@ export function SaleDetailPage() {
   const warehouseName = (warehouseId: string) =>
     warehouses.find((w) => w.id === warehouseId)?.name ?? '—';
   const productName = (productId: string) => products.find((p) => p.id === productId)?.name ?? '—';
-  const presentationName = (productId: string, unitId: string) =>
-    products.find((p) => p.id === productId)?.units.find((u) => u.id === unitId)?.name ?? '—';
   const paymentMethodName = (paymentMethodId: string) =>
     paymentMethods.find((m) => m.id === paymentMethodId)?.name ?? '—';
 
@@ -213,15 +211,6 @@ export function SaleDetailPage() {
       key: 'product_id',
       header: 'Producto',
       cell: (d) => <span className="font-medium text-text-primary">{productName(d.product_id)}</span>,
-    },
-    {
-      key: 'product_unit_id',
-      header: 'Presentación',
-      cell: (d) => (
-        <span className="text-text-secondary">
-          {presentationName(d.product_id, d.product_unit_id)}
-        </span>
-      ),
     },
     {
       key: 'quantity',

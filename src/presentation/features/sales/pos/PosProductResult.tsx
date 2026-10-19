@@ -1,16 +1,11 @@
 import { Barcode, Plus } from 'lucide-react';
 import type { Product } from '@/domain/models';
-import {
-  avatarClass,
-  availableInUnits,
-  defaultUnit,
-  formatQuantity,
-} from '@/application/hooks/pos/pos.utils';
+import { avatarClass, formatQuantity } from '@/application/hooks/pos/pos.utils';
 
 interface PosProductResultProps {
   product: Product;
-  /** Precio de catálogo de la presentación por defecto, en moneda base. */
-  getPrice: (productId: string, productUnitId: string) => number | undefined;
+  /** Precio de catálogo del producto, en moneda base. */
+  getPrice: (productId: string) => number | undefined;
   /** Pinta un importe en la moneda de visualización del POS. */
   formatAmount: (valueInBase: number) => string;
   /**
@@ -29,20 +24,14 @@ export function PosProductResult({
   available,
   onSelect,
 }: PosProductResultProps) {
-  const unit = defaultUnit(product);
-  const price = unit ? getPrice(product.id, unit.id) : undefined;
+  const price = getPrice(product.id);
   const hasStock = available !== undefined && available > 0;
-  const factor = unit?.factor ?? 1;
-  // La existencia está en unidades base; en una presentación mayor se muestra
-  // cuántas caben y cuántas unidades base quedan.
   const stockLabel =
     available === undefined
       ? null
       : !hasStock
         ? 'Sin stock'
-        : factor > 1
-          ? `${formatQuantity(availableInUnits(available, factor))} ${unit?.name} · ${formatQuantity(available)} u. base`
-          : `${formatQuantity(available)} disponibles`;
+        : `${formatQuantity(available)} disponibles`;
 
   return (
     <button
@@ -66,7 +55,6 @@ export function PosProductResult({
               {product.codes[0].code}
             </span>
           )}
-          {unit && <span className="text-xs text-text-tertiary">· {unit.name}</span>}
           {stockLabel && (
             <span
               title={

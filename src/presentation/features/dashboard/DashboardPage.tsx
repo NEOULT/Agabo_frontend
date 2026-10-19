@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, CheckCircle2, Store, Layers } from 'lucide-react';
+import { Package, CheckCircle2, Store } from 'lucide-react';
 import { Card, CardTitle } from '@/presentation/components/ui/Card';
 import { LoadingSpinner } from '@/presentation/components/shared/LoadingSpinner';
 import { useProducts } from '@/application/hooks/useProducts';
@@ -42,7 +42,6 @@ export function DashboardPage() {
 
   const totalProducts = products.length;
   const activeProducts = products.filter((p) => p.is_active).length;
-  const totalPresentations = products.reduce((sum, p) => sum + p.units.length, 0);
   const activeBranches = branches.filter((b) => b.is_active).length;
 
   return (
@@ -57,7 +56,7 @@ export function DashboardPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <KpiCard
           icon={<Package className="h-5 w-5" />}
           label="Productos"
@@ -69,12 +68,6 @@ export function DashboardPage() {
           label="Productos activos"
           value={activeProducts.toString()}
           subtext="Disponibles para operar"
-        />
-        <KpiCard
-          icon={<Layers className="h-5 w-5" />}
-          label="Presentaciones"
-          value={totalPresentations.toString()}
-          subtext="Total entre productos"
         />
         <KpiCard
           icon={<Store className="h-5 w-5" />}

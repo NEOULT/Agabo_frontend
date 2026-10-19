@@ -17,7 +17,8 @@ import type { PaymentMethod } from '@/domain/models';
  * Lista de métodos de pago (sales.payment_method).
  *
  * Muestra todos (activos e inactivos) con búsqueda, edición y
- * activación/desactivación — los métodos nunca se eliminan.
+ * activación/desactivación — los métodos nunca se eliminan. La comisión se
+ * guarda como fracción de la venta y aquí se muestra en porcentaje.
  */
 export function PaymentMethodListPage() {
   const navigate = useNavigate();
@@ -70,6 +71,18 @@ export function PaymentMethodListPage() {
       key: 'name',
       header: 'Nombre',
       cell: (p) => <span className="font-medium text-text-primary">{p.name}</span>,
+    },
+    {
+      key: 'commission_rate',
+      header: 'Comisión',
+      align: 'right',
+      cell: (p) => (
+        <span className="text-text-secondary">
+          {p.commission_rate > 0
+            ? `${(p.commission_rate * 100).toLocaleString('es', { maximumFractionDigits: 2 })} %`
+            : '—'}
+        </span>
+      ),
     },
     {
       key: 'is_active',

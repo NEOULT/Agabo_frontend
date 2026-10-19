@@ -14,21 +14,15 @@ export interface PaymentInCurrencyView {
   baseSymbol: string;
 }
 
-/** Línea del carrito del POS: producto, presentación, cantidad y precio. */
+/** Línea del carrito del POS: producto, cantidad y precio. */
 export interface CartLine {
   /** Clave local para React (no se envía al backend). */
   key: string;
   product_id: string;
-  product_unit_id: string;
   product_name: string;
+  /** Nombre de la unidad base del producto. */
   unit_name: string;
-  /**
-   * Unidades base que contiene la presentación (`product_unit_factor_num`):
-   * una "Caja x 12" vale 12. La existencia y el movimiento de inventario se
-   * llevan en unidades base, así que sin este dato una caja descontaría 1.
-   */
-  unit_factor: number;
-  /** Cantidad en la presentación elegida. */
+  /** Cantidad en la unidad base del producto. */
   quantity: number;
   unit_price: number;
   /** Oculto con el "ojito": no cuenta en el total ni se cobra. */
@@ -72,10 +66,7 @@ export interface PosStockLocation {
 
 /** Existencia de un producto en el almacén de origen, por ubicación. */
 export interface PosStockLevel {
-  /**
-   * Suma de todas las ubicaciones, en unidades base: lo que el POS muestra como
-   * disponible. Las presentaciones de un producto comparten esta existencia.
-   */
+  /** Suma de todas las ubicaciones, en unidades base del producto. */
   total: number;
   locations: PosStockLocation[];
 }

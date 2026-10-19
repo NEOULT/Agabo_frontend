@@ -64,7 +64,6 @@ export class ApiPurchaseOrderRepository implements IPurchaseOrderRepository {
         purchase_order_note_text: data.note ?? null,
         details: data.details.map((line) => ({
           product_uuid: line.product_id,
-          product_unit_uuid: line.product_unit_id,
           purchase_order_detail_quantity_num: line.quantity,
           purchase_order_detail_unit_price_num: line.unit_price,
         })),
@@ -82,7 +81,6 @@ export class ApiPurchaseOrderRepository implements IPurchaseOrderRepository {
       const query: Record<string, string> = {};
       if (params?.orderId) query.purchase_order_uuid = params.orderId;
       if (params?.productId) query.product_uuid = params.productId;
-      if (params?.productUnitId) query.product_unit_uuid = params.productUnitId;
       if (params?.fromDate) query.purchase_order_detail_created_at_tsz_from = params.fromDate;
       if (params?.toDate) query.purchase_order_detail_created_at_tsz_to = params.toDate;
 

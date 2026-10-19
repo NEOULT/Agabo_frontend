@@ -19,8 +19,8 @@ import {
  * Implementación REST de `catalog.price_product` contra el backend Express
  * (ver `docs/schema-catalog/api-contract-price.md`).
  *
- * Liga una lista con una presentación de un producto y no se elimina: el
- * precio se retira con desactivación (RF-CAT-026).
+ * Liga una lista con un producto y no se elimina: el precio se retira con
+ * desactivación (RF-CAT-026).
  */
 export class ApiPriceProductRepository implements IPriceProductRepository {
   async getAll(
@@ -31,7 +31,6 @@ export class ApiPriceProductRepository implements IPriceProductRepository {
       const query: Record<string, string> = {};
       if (params?.priceListId) query.price_list_uuid = params.priceListId;
       if (params?.productId) query.product_uuid = params.productId;
-      if (params?.productUnitId) query.product_unit_uuid = params.productUnitId;
       if (params?.isActive !== undefined) {
         query.price_product_is_active_bl = String(params.isActive);
       }
@@ -63,7 +62,6 @@ export class ApiPriceProductRepository implements IPriceProductRepository {
       const { data: created } = await api.post<ApiPriceProduct>('/price-products', {
         price_list_uuid: data.price_list_id,
         product_uuid: data.product_id,
-        product_unit_uuid: data.product_unit_id,
         price_product_price_num: data.price,
       });
       return toPriceProduct(created);
@@ -74,8 +72,8 @@ export class ApiPriceProductRepository implements IPriceProductRepository {
 
   async update(id: string, data: UpdatePriceProductDTO): Promise<PriceProduct> {
     try {
-      // La lista, el producto y la presentación no son editables en PATCH
-      // (RF-CAT-025): para cambiarlos se retira el precio y se asigna otro.
+      // La lista y el producto no son editables en PATCH (RF-CAT-025): para
+      // cambiarlos se retira el precio y se asigna otro.
       const payload: Record<string, number> = {};
       if (data.price !== undefined) payload.price_product_price_num = data.price;
 

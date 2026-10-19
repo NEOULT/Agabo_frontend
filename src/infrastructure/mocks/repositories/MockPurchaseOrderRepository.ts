@@ -57,7 +57,6 @@ export class MockPurchaseOrderRepository implements IPurchaseOrderRepository {
       id: `detail-${Date.now()}-${index}`,
       order_id: orderId,
       product_id: line.product_id,
-      product_unit_id: line.product_unit_id,
       quantity: line.quantity,
       unit_price: line.unit_price,
       // El backend calcula el importe de línea (RN-PUR-006)
@@ -90,9 +89,6 @@ export class MockPurchaseOrderRepository implements IPurchaseOrderRepository {
     let details = ordersState.flatMap((order) => order.details);
     if (params?.orderId) details = details.filter((d) => d.order_id === params.orderId);
     if (params?.productId) details = details.filter((d) => d.product_id === params.productId);
-    if (params?.productUnitId) {
-      details = details.filter((d) => d.product_unit_id === params.productUnitId);
-    }
 
     return { data: details, total: details.length };
   }

@@ -57,9 +57,14 @@ export class ApiPaymentMethodRepository implements IPaymentMethodRepository {
 
   async create(data: CreatePaymentMethodDTO): Promise<PaymentMethod> {
     try {
-      const { data: created } = await api.post<ApiPaymentMethod>('/payment-methods', {
+      const payload: Record<string, string | number> = {
         payment_method_name_text: data.name,
-      });
+      };
+      if (data.commission_rate !== undefined) {
+        payload.payment_method_commission_rate_num = data.commission_rate;
+      }
+
+      const { data: created } = await api.post<ApiPaymentMethod>('/payment-methods', payload);
       return toPaymentMethod(created);
     } catch (error) {
       throw toApiError(error);
@@ -68,8 +73,11 @@ export class ApiPaymentMethodRepository implements IPaymentMethodRepository {
 
   async update(id: string, data: UpdatePaymentMethodDTO): Promise<PaymentMethod> {
     try {
-      const payload: Record<string, string> = {};
+      const payload: Record<string, string | number> = {};
       if (data.name !== undefined) payload.payment_method_name_text = data.name;
+      if (data.commission_rate !== undefined) {
+        payload.payment_method_commission_rate_num = data.commission_rate;
+      }
 
       const { data: updated } = await api.patch<ApiPaymentMethod>(`/payment-methods/${id}`, payload);
       return toPaymentMethod(updated);

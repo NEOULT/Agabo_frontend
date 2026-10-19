@@ -1,17 +1,9 @@
 import { Eye, EyeOff, Minus, Plus, Trash2 } from 'lucide-react';
-import type { Product } from '@/domain/models';
 import type { CartLine } from '@/application/hooks/pos/pos.types';
-import {
-  activeUnitOptions,
-  avatarClass,
-  availableInUnits,
-  formatQuantity,
-} from '@/application/hooks/pos/pos.utils';
+import { avatarClass, formatQuantity } from '@/application/hooks/pos/pos.utils';
 
 interface PosCartLineRowProps {
   line: CartLine;
-  /** Producto de la línea: da las presentaciones seleccionables. */
-  product?: Product;
   /**
    * Existencia del producto en el almacén de origen, en unidades base
    * (`undefined` = sin dato).
@@ -21,28 +13,23 @@ interface PosCartLineRowProps {
   baseSymbol: string;
   /** Pinta un importe en la moneda de visualización del POS. */
   formatAmount: (valueInBase: number) => string;
-  onChangeUnit: (line: CartLine, unitId: string) => void;
   onQuantityChange: (line: CartLine, quantity: number) => void;
   onUnitPriceChange: (line: CartLine, unitPrice: number) => void;
   onToggleHidden: (line: CartLine) => void;
   onRemove: (line: CartLine) => void;
 }
 
-/** Línea del carrito: presentación, cantidad, precio, ocultar y quitar. */
+/** Línea del carrito: cantidad, precio, ocultar y quitar. */
 export function PosCartLineRow({
   line,
-  product,
   available,
   baseSymbol,
   formatAmount,
-  onChangeUnit,
   onQuantityChange,
   onUnitPriceChange,
   onToggleHidden,
   onRemove,
 }: PosCartLineRowProps) {
-  const unitOptions = activeUnitOptions(product);
-
   return (
     <li
       className={`flex items-center gap-3 px-3 py-3 ${line.is_hidden ? 'opacity-50' : ''}`}
@@ -58,18 +45,7 @@ export function PosCartLineRow({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-text-primary">{line.product_name}</p>
         <div className="mt-1 flex items-center gap-2">
-          <select
-            value={line.product_unit_id}
-            onChange={(e) => onChangeUnit(line, e.target.value)}
-            className="rounded-md border border-border-input bg-surface-primary px-2 py-0.5 text-xs text-text-secondary"
-            aria-label="Presentación"
-          >
-            {unitOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <span className="text-xs text-text-secondary">{line.unit_name}</span>
           <span className="text-xs text-text-tertiary">
             {line.unit_price > 0 ? `${formatAmount(line.unit_price)} c/u` : 'sin precio'}
           </span>
@@ -79,9 +55,7 @@ export function PosCartLineRow({
                 className="text-xs text-text-tertiary"
                 title={`${formatQuantity(available)} unidades base en el almacén de origen`}
               >
-                Disponible: {formatQuantity(availableInUnits(available, line.unit_factor))}
-                {line.unit_factor > 1 &&
-                  ` ${line.unit_name} (${formatQuantity(available)} u. base)`}
+                Disponible: {formatQuantity(available)} {line.unit_name}
               </span>
             ) : (
               <span className="text-xs font-medium text-semantic-danger-700">Sin stock</span>

@@ -2,11 +2,12 @@
  * 📦 Producto (catalog.product)
  *
  * Alineado al contrato (`docs/schema-catalog/api-contract-product.md`):
- * - `base_unit_id` es obligatorio al crear y NO es editable después.
- * - Al crear, el backend genera automáticamente la **presentación base**
- *   (un `product_unit` sobre la unidad base, factor 1).
- * - Los precios NO viven aquí: están en `catalog.price_product` por lista
- *   de precios (módulo de precios, pendiente).
+ * - `base_unit_id` es obligatorio al crear y NO es editable después: es la
+ *   unidad en la que se compra, almacena y vende el producto.
+ * - Si el comercio vende presentaciones distintas, registra un producto por
+ *   cada una.
+ * - Los precios NO viven aquí: están en `catalog.price_product` por lista de
+ *   precios.
  * - No se elimina: se activa/desactiva (RF-CAT-016).
  */
 
@@ -33,29 +34,6 @@ export interface ProductCode {
   updated_at: string;
 }
 
-/**
- * 📦 Presentación del producto (catalog.product_unit).
- * Ej: "Caja x 12" sobre la unidad "Caja" con factor 12.
- */
-export interface ProductUnit {
-  /** product_unit_uuid */
-  id: string;
-  /** product_uuid */
-  product_id: string;
-  /** unit_uuid */
-  unit_id: string;
-  /** product_unit_name_text */
-  name: string;
-  /** product_unit_factor_num — unidades base que contiene; > 0 */
-  factor: number;
-  /** product_unit_is_active_bl */
-  is_active: boolean;
-  /** product_unit_created_at_tsz */
-  created_at: string;
-  /** product_unit_updated_at_tsz */
-  updated_at: string;
-}
-
 export interface Product {
   /** product_uuid */
   id: string;
@@ -79,8 +57,6 @@ export interface Product {
   updated_at: string;
   /** Códigos (SKU / barras) del producto. */
   codes: ProductCode[];
-  /** Presentaciones del producto (incluye la base). */
-  units: ProductUnit[];
 }
 
 export interface CreateProductDTO {
@@ -114,17 +90,4 @@ export interface UpdateProductCodeDTO {
   code?: string;
   type?: ProductCodeType;
   is_primary?: boolean;
-}
-
-export interface CreatePresentationDTO {
-  product_id: string;
-  unit_id: string;
-  name: string;
-  factor: number;
-}
-
-/** `product_id` y `unit_id` no son editables en PATCH. */
-export interface UpdatePresentationDTO {
-  name?: string;
-  factor?: number;
 }

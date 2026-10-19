@@ -34,8 +34,7 @@ type FormErrors = Partial<Record<keyof FormValues, string>>;
 /**
  * Alta de producto (RF-CAT-001).
  *
- * Solo crea: obligatorios nombre y unidad base (el backend genera la
- * presentación base sobre esa unidad). La edición posterior —nombre,
+ * Solo crea: obligatorios nombre y unidad base. La edición posterior —nombre,
  * descripción, categoría y marca— se hace en la pantalla de detalle del
  * producto, sin salir de ella (RF-CAT-015); la unidad base no es editable.
  */
@@ -96,7 +95,7 @@ export function ProductFormPage() {
         brand_id: values.brand_id || undefined,
       });
       toast.success(`El producto "${values.name.trim()}" fue creado.`);
-      // Al detalle para que agregue códigos y presentaciones
+      // Al detalle para que agregue códigos
       navigate(`/catalog/products/${product.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo guardar el producto.');

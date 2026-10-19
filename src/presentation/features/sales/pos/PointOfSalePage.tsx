@@ -24,6 +24,7 @@ import { useWarehouses } from '@/application/hooks/useWarehouses';
 import { useBranches } from '@/application/hooks/useBranches';
 import { usePrices } from '@/application/hooks/usePrices';
 import { useCurrencies } from '@/application/hooks/useCurrencies';
+import { useUnits } from '@/application/hooks/useUnits';
 import { usePermissions } from '@/application/hooks/usePermissions';
 import { useParkedTickets } from '@/application/hooks/pos/useParkedTickets';
 import { usePosCart } from '@/application/hooks/pos/usePosCart';
@@ -82,6 +83,7 @@ export function PointOfSalePage() {
   const { branches, activeBranch } = useBranches();
   const { getPrice, loadPrices, error: pricesError } = usePrices();
   const { currencies, fetchCurrencies, error: currenciesError } = useCurrencies();
+  const { units, fetchUnits } = useUnits();
 
   const { can } = usePermissions();
   const canSell = can('sales.sales:create') && can('sales.payments:create');
@@ -148,7 +150,6 @@ export function PointOfSalePage() {
     itemsCount,
     addProduct,
     updateLine,
-    changeUnit,
     removeLine,
     toggleLineHidden,
     clear: clearCart,
@@ -244,7 +245,8 @@ export function PointOfSalePage() {
     fetchCustomers({ isActive: true });
     fetchPaymentMethods({ isActive: true });
     fetchCurrencies({ isActive: true });
-  }, [fetchProducts, fetchCustomers, fetchPaymentMethods, fetchCurrencies]);
+    fetchUnits();
+  }, [fetchProducts, fetchCustomers, fetchPaymentMethods, fetchCurrencies, fetchUnits]);
 
   // Sucursal activa por defecto (la misma que acota el backend).
   React.useEffect(() => {
@@ -283,8 +285,6 @@ export function PointOfSalePage() {
 
   const matches = React.useMemo(() => searchProducts(activeProducts, search), [activeProducts, search]);
 
-  const productById = (id: string) => activeProducts.find((p) => p.id === id);
-
   /**
    * Existencia del producto en el almacén de origen. Un producto sin fila de
    * stock está agotado (0); `undefined` es "sin dato" (sin permiso o cargando).
@@ -293,10 +293,8 @@ export function PointOfSalePage() {
     availability ? (availability[productId] ?? 0) : undefined;
 
   const handleAddProduct = (product: Product) => {
-    if (!addProduct(product)) {
-      toast.error(`"${product.name}" no tiene presentaciones activas.`);
-      return;
-    }
+    const unitName = units.find((unit) => unit.id === product.base_unit_id)?.name ?? 'Unidad';
+    addProduct(product, unitName);
 
     setSearch('');
     dismissLastSale();
@@ -341,12 +339,6 @@ export function PointOfSalePage() {
     if (e.key !== 'Enter') return;
     e.preventDefault();
     if (matches[0]) handleAddProduct(matches[0]);
-  };
-
-  const handleChangeUnit = (line: CartLine, unitId: string) => {
-    const unit = productById(line.product_id)?.units.find((u) => u.id === unitId);
-    if (!unit) return;
-    changeUnit(line, unit);
   };
 
   /** Retoma un ticket en espera y avisa. */
@@ -550,11 +542,9 @@ export function PointOfSalePage() {
                 <PosCartLineRow
                   key={line.key}
                   line={line}
-                  product={productById(line.product_id)}
                   available={stockOf(line.product_id)}
                   baseSymbol={baseFormat.symbol}
                   formatAmount={money}
-                  onChangeUnit={handleChangeUnit}
                   onQuantityChange={(current, quantity) =>
                     updateLine(current.key, { quantity })
                   }

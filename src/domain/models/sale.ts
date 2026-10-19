@@ -16,7 +16,7 @@
 /** Estado derivado del pago de una venta (RN-SAL-006 / RF-SAL-022). */
 export type SalePaymentStatus = 'pending' | 'partial' | 'paid';
 
-/** 📋 Línea de la venta: producto, presentación, cantidad y precio congelado. */
+/** 📋 Línea de la venta: producto, cantidad y precio congelado. */
 export interface SaleDetail {
   /** sale_detail_uuid */
   id: string;
@@ -24,8 +24,6 @@ export interface SaleDetail {
   sale_id: string;
   /** product_uuid */
   product_id: string;
-  /** product_unit_uuid — presentación vendida */
-  product_unit_id: string;
   /** location_uuid — ubicación de origen dentro del almacén (opcional) */
   location_id?: string;
   /** sale_detail_quantity_num — > 0 */
@@ -99,7 +97,6 @@ export interface Sale {
 /** Línea al crear una venta: sin importes calculados (los calcula el backend). */
 export interface CreateSaleDetailDTO {
   product_id: string;
-  product_unit_id: string;
   location_id?: string;
   quantity: number;
   /**

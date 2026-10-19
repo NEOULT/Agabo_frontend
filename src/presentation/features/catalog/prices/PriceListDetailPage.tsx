@@ -24,21 +24,20 @@ import type { PriceList, PriceProduct } from '@/domain/models';
 
 interface PriceFormValues {
   product_id: string;
-  product_unit_id: string;
   price: string;
 }
 
-const emptyPriceForm: PriceFormValues = { product_id: '', product_unit_id: '', price: '' };
+const emptyPriceForm: PriceFormValues = { product_id: '', price: '' };
 
 /**
  * Precios de una lista (catalog.price_product).
  *
- * Un precio liga la lista con una presentación de un producto (RN-CAT-007: un
- * precio vigente por lista y presentación). Se edita el valor con PATCH y el
- * precio se retira con desactivación, nunca se elimina.
+ * Un precio liga la lista con un producto (RN-CAT-007: un precio vigente por
+ * lista y producto). Se edita el valor con PATCH y el precio se retira con
+ * desactivación, nunca se elimina.
  *
- * El backend exige lista activa para asignar precios, y producto y
- * presentación activos para asignar o reactivar (`parent_inactive`).
+ * El backend exige lista activa para asignar precios y producto activo para
+ * asignar o reactivar (`parent_inactive`).
  */
 export function PriceListDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -145,8 +144,6 @@ export function PriceListDetailPage() {
 
   const findProduct = (productId: string) => products.find((p) => p.id === productId);
   const productName = (productId: string) => findProduct(productId)?.name ?? '—';
-  const unitName = (productId: string, unitId: string) =>
-    findProduct(productId)?.units.find((u) => u.id === unitId)?.name ?? '—';
 
   // --- Nombre de la lista: guardar -----------------------------------------
   const openListForm = () => {
@@ -219,7 +216,6 @@ export function PriceListDetailPage() {
   const openEditPrice = (priceProduct: PriceProduct) => {
     setPriceValues({
       product_id: priceProduct.product_id,
-      product_unit_id: priceProduct.product_unit_id,
       price: String(priceProduct.price),
     });
     setPriceFieldErrors({});
@@ -230,12 +226,7 @@ export function PriceListDetailPage() {
     (field: keyof PriceFormValues) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const value = e.target.value;
-      setPriceValues((prev) => ({
-        ...prev,
-        [field]: value,
-        // Al cambiar de producto, la presentación elegida deja de aplicar.
-        ...(field === 'product_id' ? { product_unit_id: '' } : {}),
-      }));
+      setPriceValues((prev) => ({ ...prev, [field]: value }));
       if (priceFieldErrors[field]) {
         setPriceFieldErrors((prev) => ({ ...prev, [field]: undefined }));
       }
@@ -248,12 +239,8 @@ export function PriceListDetailPage() {
     const editingPrice = priceForm === 'create' ? null : priceForm;
     const errors: Partial<Record<keyof PriceFormValues, string>> = {};
 
-    if (!editingPrice) {
-      const productError = required(priceValues.product_id, 'El producto');
-      if (productError) errors.product_id = productError;
-
-      const unitError = required(priceValues.product_unit_id, 'La presentación');
-      if (unitError) errors.product_unit_id = unitError;
+    if (!editingPrice && !priceValues.product_id) {
+      errors.product_id = 'Selecciona un producto.';
     }
 
     const priceError = validate(priceValues.price, [
@@ -276,7 +263,6 @@ export function PriceListDetailPage() {
         const created = await createPriceProduct({
           price_list_id: id,
           product_id: priceValues.product_id,
-          product_unit_id: priceValues.product_unit_id,
           price,
         });
         toast.success(
@@ -322,9 +308,7 @@ export function PriceListDetailPage() {
       if (statusFilter === 'inactive' && p.is_active) return false;
       if (!term) return true;
 
-      const product = productName(p.product_id).toLowerCase();
-      const unit = unitName(p.product_id, p.product_unit_id).toLowerCase();
-      return product.includes(term) || unit.includes(term);
+      return productName(p.product_id).toLowerCase().includes(term);
     });
   }, [priceProducts, search, statusFilter, products]);
 
@@ -334,22 +318,11 @@ export function PriceListDetailPage() {
     .filter((p) => !productTerm || p.name.toLowerCase().includes(productTerm))
     .map((p) => ({ value: p.id, label: p.name }));
 
-  const unitOptions = (findProduct(priceValues.product_id)?.units ?? [])
-    .filter((u) => u.is_active)
-    .map((u) => ({ value: u.id, label: u.name }));
-
   const columns: TableColumn<PriceProduct>[] = [
     {
       key: 'product_id',
       header: 'Producto',
       cell: (p) => <span className="font-medium text-text-primary">{productName(p.product_id)}</span>,
-    },
-    {
-      key: 'product_unit_id',
-      header: 'Presentación',
-      cell: (p) => (
-        <span className="text-text-secondary">{unitName(p.product_id, p.product_unit_id)}</span>
-      ),
     },
     {
       key: 'price',
@@ -519,7 +492,7 @@ export function PriceListDetailPage() {
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder="Buscar por producto o presentación..."
+              placeholder="Buscar por producto..."
             />
           </div>
           <div className="w-full sm:w-44">
@@ -547,7 +520,7 @@ export function PriceListDetailPage() {
               description={
                 hasFilters
                   ? 'No se encontraron precios que coincidan con la búsqueda.'
-                  : 'Asigna el precio de cada producto y presentación para venderlos en esta sucursal.'
+                  : 'Asigna el precio de cada producto para venderlo en esta sucursal.'
               }
               action={
                 !hasFilters && canCreatePrice && priceList.is_active ? (
@@ -598,20 +571,6 @@ export function PriceListDetailPage() {
             required
           />
 
-          <Select
-            label="Presentación"
-            value={priceValues.product_unit_id}
-            onChange={handleChangePrice('product_unit_id')}
-            options={unitOptions}
-            placeholder={
-              priceValues.product_id ? 'Selecciona una presentación' : 'Elige un producto primero'
-            }
-            error={priceFieldErrors.product_unit_id}
-            helperText="Cada presentación tiene su propio precio (RN-CAT-007)."
-            disabled={!priceValues.product_id}
-            required
-          />
-
           <Input
             label="Precio"
             type="number"
@@ -635,7 +594,7 @@ export function PriceListDetailPage() {
         title="Editar Precio"
         subtitle={
           priceForm !== null && priceForm !== 'create'
-            ? `${productName(priceForm.product_id)} — ${unitName(priceForm.product_id, priceForm.product_unit_id)}`
+            ? productName(priceForm.product_id)
             : undefined
         }
         icon={<DollarSign className="h-5 w-5" />}
@@ -661,7 +620,7 @@ export function PriceListDetailPage() {
             value={priceValues.price}
             onChange={handleChangePrice('price')}
             error={priceFieldErrors.price}
-            helperText="El producto y la presentación no se pueden cambiar; retira el precio y asigna uno nuevo."
+            helperText="El producto no se puede cambiar; retira el precio y asigna uno nuevo."
             required
           />
         </form>
@@ -725,7 +684,7 @@ export function PriceListDetailPage() {
         message={
           pendingPriceAction?.type === 'deactivate'
             ? `¿Retirar el precio de "${pendingPriceName}" en esta lista? El precio conserva su historial pero deja de aplicarse a nuevas ventas.`
-            : `¿Reactivar el precio de "${pendingPriceName}"? El producto, la presentación y la lista deben estar activos.`
+            : `¿Reactivar el precio de "${pendingPriceName}"? El producto y la lista deben estar activos.`
         }
         confirmLabel={pendingPriceAction?.type === 'deactivate' ? 'Retirar' : 'Reactivar'}
       />

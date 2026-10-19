@@ -264,7 +264,7 @@ export function UnitListPage() {
         title={pendingAction?.type === 'deactivate' ? 'Desactivar unidad' : 'Activar unidad'}
         message={
           pendingAction?.type === 'deactivate'
-            ? `¿Desactivar "${pendingAction.unit.name}"? No podrá asignarse a nuevos productos ni presentaciones, pero los existentes conservan su referencia.`
+            ? `¿Desactivar "${pendingAction.unit.name}"? No podrá asignarse a nuevos productos, pero los existentes conservan su referencia.`
             : `¿Activar "${pendingAction?.unit.name}"? Volverá a estar disponible para operar.`
         }
         confirmLabel={pendingAction?.type === 'deactivate' ? 'Desactivar' : 'Activar'}

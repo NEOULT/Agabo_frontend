@@ -1,13 +1,10 @@
 import type {
   Product,
   ProductCode,
-  ProductUnit,
   CreateProductDTO,
   UpdateProductDTO,
   CreateProductCodeDTO,
   UpdateProductCodeDTO,
-  CreatePresentationDTO,
-  UpdatePresentationDTO,
 } from '@/domain/models';
 import type { SearchParams } from '@/shared/types/common';
 
@@ -30,9 +27,8 @@ export interface ProductQueryParams extends SearchParams {
 /**
  * Contrato del catálogo de productos (schema catalog).
  *
- * Agrupa `product`, `product_code` y `product_unit` porque son un mismo
- * agregado: los códigos y las presentaciones se administran desde el detalle
- * del producto (RF-CAT-013 a RF-CAT-018).
+ * Agrupa `product` y `product_code` porque son un mismo agregado: los códigos
+ * se administran desde el detalle del producto (RF-CAT-013 a RF-CAT-017).
  *
  * No existe `delete` para productos: se activan/desactivan (RF-CAT-016).
  */
@@ -52,11 +48,4 @@ export interface IProductRepository {
   updateCode(id: string, data: UpdateProductCodeDTO): Promise<ProductCode>;
   /** DELETE /api/product-codes/{uuid} — falla con `last_code_cannot_be_removed`. */
   removeCode(id: string): Promise<void>;
-
-  // --- Presentaciones (RF-CAT-018) -----------------------------------------
-  createPresentation(data: CreatePresentationDTO): Promise<ProductUnit>;
-  updatePresentation(id: string, data: UpdatePresentationDTO): Promise<ProductUnit>;
-  /** La presentación base no se puede desactivar si el producto está activo. */
-  setPresentationActive(id: string): Promise<ProductUnit>;
-  setPresentationInactive(id: string): Promise<ProductUnit>;
 }

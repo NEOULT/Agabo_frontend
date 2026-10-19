@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
 import { useRepositories } from '@/application/providers/RepositoryProvider';
 
-/** Clave del mapa de precios: producto + presentación. */
-export function priceKey(productId: string, productUnitId: string): string {
-  return `${productId}:${productUnitId}`;
+/** Clave del mapa de precios: producto. */
+export function priceKey(productId: string): string {
+  return productId;
 }
 
 /**
@@ -11,8 +11,8 @@ export function priceKey(productId: string, productUnitId: string): string {
  *
  * El punto de venta necesita el precio al agregar el producto para mostrar el
  * total en vivo. Se carga la lista activa de la sucursal y se arma un mapa
- * `producto:presentación → precio`. Cuando una sucursal tiene varias listas
- * activas, gana el precio más reciente, igual que el backend (RN-CAT-007 /
+ * `producto → precio`. Cuando una sucursal tiene varias listas activas, gana el
+ * precio más reciente, igual que el backend (RN-CAT-007 /
  * `find-active-for-branch`).
  */
 export function usePrices() {
@@ -46,7 +46,7 @@ export function usePrices() {
 
         const map: Record<string, number> = {};
         for (const row of rows) {
-          map[priceKey(row.product_id, row.product_unit_id)] = row.price;
+          map[priceKey(row.product_id)] = row.price;
         }
         setPrices(map);
       } catch (err) {
@@ -60,8 +60,7 @@ export function usePrices() {
   );
 
   const getPrice = useCallback(
-    (productId: string, productUnitId: string): number | undefined =>
-      prices[priceKey(productId, productUnitId)],
+    (productId: string): number | undefined => prices[priceKey(productId)],
     [prices],
   );
 

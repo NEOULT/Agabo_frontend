@@ -4,11 +4,9 @@ import { persist } from 'zustand/middleware';
 /** Línea de un ticket en espera (misma forma que el carrito, sin la clave de React). */
 export interface ParkedSaleLine {
   product_id: string;
-  product_unit_id: string;
   product_name: string;
+  /** Nombre de la unidad base del producto. */
   unit_name: string;
-  /** Unidades base de la presentación (los tickets viejos valen 1). */
-  unit_factor: number;
   quantity: number;
   unit_price: number;
   /** Oculto con el "ojito": no cuenta en el total ni se cobra. */

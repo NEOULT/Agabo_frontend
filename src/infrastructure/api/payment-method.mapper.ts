@@ -5,6 +5,7 @@ export interface ApiPaymentMethod {
   payment_method_uuid: string;
   company_uuid: string;
   payment_method_name_text: string;
+  payment_method_commission_rate_num?: number;
   payment_method_is_active_bl: boolean;
   payment_method_created_at_tsz: string;
   payment_method_updated_at_tsz: string;
@@ -22,6 +23,7 @@ export function toPaymentMethod(apiPaymentMethod: ApiPaymentMethod): PaymentMeth
     id: apiPaymentMethod.payment_method_uuid,
     company_id: apiPaymentMethod.company_uuid,
     name: apiPaymentMethod.payment_method_name_text,
+    commission_rate: Number(apiPaymentMethod.payment_method_commission_rate_num ?? 0),
     is_active: apiPaymentMethod.payment_method_is_active_bl,
     created_at: apiPaymentMethod.payment_method_created_at_tsz,
     updated_at: apiPaymentMethod.payment_method_updated_at_tsz,

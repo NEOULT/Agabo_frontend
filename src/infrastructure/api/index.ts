@@ -16,7 +16,7 @@ export { toPriceList } from './price-list.mapper';
 export { ApiPriceProductRepository } from './ApiPriceProductRepository';
 export { toPriceProduct } from './price-product.mapper';
 export { ApiProductRepository } from './ApiProductRepository';
-export { toProduct, toProductCode, toProductUnit } from './product.mapper';
+export { toProduct, toProductCode } from './product.mapper';
 export { ApiUnitRepository } from './ApiUnitRepository';
 export { toUnit } from './unit.mapper';
 export { ApiCategoryRepository } from './ApiCategoryRepository';

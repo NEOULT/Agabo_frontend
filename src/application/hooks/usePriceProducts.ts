@@ -10,8 +10,8 @@ import type { PriceProductQueryParams } from '@/domain/repositories';
 /**
  * Precios de producto (catalog.price_product) de una lista de precios.
  *
- * Un precio liga una lista con una presentación de un producto; no se elimina:
- * se retira con desactivación (RF-CAT-026).
+ * Un precio liga una lista con un producto; no se elimina: se retira con
+ * desactivación (RF-CAT-026).
  */
 export function usePriceProducts() {
   const { priceProducts: priceProductRepo } = useRepositories();

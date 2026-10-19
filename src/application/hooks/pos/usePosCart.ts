@@ -1,20 +1,18 @@
 import { useCallback, useMemo } from 'react';
 import type { ParkedSaleLine } from '@/application/stores/useParkedSalesStore';
 import { usePosSessionStore } from '@/application/stores/usePosSessionStore';
-import type { Product, ProductUnit } from '@/domain/models';
-import type { CartLine } from './pos.types';
+import type { Product } from '@/domain/models';
 import {
   billableLines,
   cartItemsCount,
   cartTotal,
-  defaultUnit,
   fromParkedLines,
   nextCartLineKey,
 } from './pos.utils';
 
 interface UsePosCartOptions {
-  /** Precio de catálogo de la sucursal para producto + presentación. */
-  getPrice: (productId: string, productUnitId: string) => number | undefined;
+  /** Precio de catálogo de la sucursal para el producto. */
+  getPrice: (productId: string) => number | undefined;
 }
 
 /**
@@ -43,47 +41,22 @@ export function usePosCart({ getPrice }: UsePosCartOptions) {
   const itemsCount = useMemo(() => cartItemsCount(billable), [billable]);
 
   /**
-   * Agrega un producto con su presentación por defecto y el precio de catálogo.
-   * Dos líneas del mismo producto y presentación se suman. Devuelve `false` si
-   * el producto no tiene presentaciones activas, para que la pantalla avise.
+   * Agrega un producto con el precio de catálogo. Dos líneas del mismo producto
+   * se suman. `unitName` es el nombre de la unidad base, solo para mostrar.
    */
   const addProduct = useCallback(
-    (product: Product): boolean => {
-      const unit = defaultUnit(product);
-      if (!unit) return false;
-
+    (product: Product, unitName = 'Unidad') => {
       upsertLine({
         key: nextCartLineKey(),
         product_id: product.id,
-        product_unit_id: unit.id,
         product_name: product.name,
-        unit_name: unit.name,
-        unit_factor: unit.factor,
+        unit_name: unitName,
         quantity: 1,
-        unit_price: getPrice(product.id, unit.id) ?? 0,
+        unit_price: getPrice(product.id) ?? 0,
         is_hidden: false,
       });
-
-      return true;
     },
     [getPrice, upsertLine],
-  );
-
-  /**
-   * Cambia la presentación de una línea y refresca su precio de catálogo. La
-   * cantidad no se toca: 2 "Botella" siguen siendo 2, ahora de la presentación
-   * nueva (con su factor para pasar a unidades base).
-   */
-  const changeUnit = useCallback(
-    (line: CartLine, unit: ProductUnit) => {
-      updateLine(line.key, {
-        product_unit_id: unit.id,
-        unit_name: unit.name,
-        unit_factor: unit.factor,
-        unit_price: getPrice(line.product_id, unit.id) ?? line.unit_price,
-      });
-    },
-    [getPrice, updateLine],
   );
 
   const clear = useCallback(() => clearLines(), [clearLines]);
@@ -101,7 +74,6 @@ export function usePosCart({ getPrice }: UsePosCartOptions) {
     itemsCount,
     addProduct,
     updateLine,
-    changeUnit,
     removeLine,
     toggleLineHidden,
     clear,

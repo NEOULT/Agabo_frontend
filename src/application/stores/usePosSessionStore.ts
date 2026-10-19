@@ -29,7 +29,7 @@ interface PosSessionState {
   amount: string;
   amountEdited: boolean;
 
-  /** Agrega la línea; si ya existe el mismo producto y presentación, suma 1. */
+  /** Agrega la línea; si ya existe el mismo producto, suma 1. */
   upsertLine: (line: CartLine) => void;
   updateLine: (key: string, changes: Partial<CartLine>) => void;
   removeLine: (key: string) => void;
@@ -59,9 +59,9 @@ export const usePosSessionStore = create<PosSessionState>()(
 
       upsertLine: (line) =>
         set((state) => {
-          const key = cartLineKey(line.product_id, line.product_unit_id);
+          const key = cartLineKey(line.product_id);
           const existing = state.lines.find(
-            (current) => cartLineKey(current.product_id, current.product_unit_id) === key,
+            (current) => cartLineKey(current.product_id) === key,
           );
 
           if (existing) {

@@ -2,28 +2,22 @@ import type { IProductRepository, ProductQueryParams } from '@/domain/repositori
 import type {
   Product,
   ProductCode,
-  ProductUnit,
   CreateProductDTO,
   UpdateProductDTO,
   CreateProductCodeDTO,
   UpdateProductCodeDTO,
-  CreatePresentationDTO,
-  UpdatePresentationDTO,
 } from '@/domain/models';
 import { MOCK_COMPANY_ID, MOCK_PRODUCTS, MOCK_UNITS } from '@/infrastructure/mocks/data';
 
 /**
  * Mock del catálogo de productos. Replica las reglas del backend:
- * - Al crear se genera la presentación base (factor 1).
  * - El código de producto es único en la empresa.
  * - No se puede retirar el último código del producto.
- * - La presentación base no se desactiva con el producto activo.
  */
 export class MockProductRepository implements IProductRepository {
   private products: Product[] = MOCK_PRODUCTS.map((p) => ({
     ...p,
     codes: [...p.codes],
-    units: [...p.units],
   }));
 
   private delay(ms = 200) {
@@ -89,19 +83,6 @@ export class MockProductRepository implements IProductRepository {
       created_at: now,
       updated_at: now,
       codes: [],
-      // El backend crea la presentación base automáticamente
-      units: [
-        {
-          id: `punit-${Date.now()}`,
-          product_id: productId,
-          unit_id: data.base_unit_id,
-          name: baseUnit.name,
-          factor: 1,
-          is_active: true,
-          created_at: now,
-          updated_at: now,
-        },
-      ],
     };
 
     this.products.push(product);
@@ -228,84 +209,6 @@ export class MockProductRepository implements IProductRepository {
     };
   }
 
-  // --- Presentaciones ------------------------------------------------------
-  async createPresentation(data: CreatePresentationDTO): Promise<ProductUnit> {
-    await this.delay();
-    const index = this.findIndex(data.product_id);
-    const product = this.products[index];
-
-    const duplicated = product.units.some((u) => u.unit_id === data.unit_id);
-    if (duplicated) throw new Error('El producto ya tiene una presentación con esa unidad.');
-
-    const now = new Date().toISOString();
-    const presentation: ProductUnit = {
-      id: `punit-${Date.now()}`,
-      product_id: product.id,
-      unit_id: data.unit_id,
-      name: data.name,
-      factor: data.factor,
-      is_active: true,
-      created_at: now,
-      updated_at: now,
-    };
-
-    this.products[index] = {
-      ...product,
-      units: [...product.units, presentation],
-      updated_at: now,
-    };
-    return presentation;
-  }
-
-  async updatePresentation(id: string, data: UpdatePresentationDTO): Promise<ProductUnit> {
-    await this.delay();
-    const { productIndex, unitIndex } = this.findPresentation(id);
-    const product = this.products[productIndex];
-
-    const updated: ProductUnit = {
-      ...product.units[unitIndex],
-      name: data.name ?? product.units[unitIndex].name,
-      factor: data.factor ?? product.units[unitIndex].factor,
-      updated_at: new Date().toISOString(),
-    };
-
-    const units = [...product.units];
-    units[unitIndex] = updated;
-    this.products[productIndex] = { ...product, units, updated_at: new Date().toISOString() };
-    return updated;
-  }
-
-  async setPresentationActive(id: string): Promise<ProductUnit> {
-    return this.togglePresentation(id, true);
-  }
-
-  async setPresentationInactive(id: string): Promise<ProductUnit> {
-    return this.togglePresentation(id, false);
-  }
-
-  private async togglePresentation(id: string, isActive: boolean): Promise<ProductUnit> {
-    await this.delay(150);
-    const { productIndex, unitIndex } = this.findPresentation(id);
-    const product = this.products[productIndex];
-    const presentation = product.units[unitIndex];
-
-    // La presentación base no se desactiva mientras el producto esté activo
-    if (
-      !isActive &&
-      product.is_active &&
-      presentation.unit_id === product.base_unit_id &&
-      presentation.factor === 1
-    ) {
-      throw new Error('La presentación base no se puede desactivar mientras el producto esté activo.');
-    }
-
-    const updated: ProductUnit = { ...presentation, is_active: isActive, updated_at: new Date().toISOString() };
-    const units = [...product.units];
-    units[unitIndex] = updated;
-    this.products[productIndex] = { ...product, units, updated_at: new Date().toISOString() };
-    return updated;
-  }
-
   // --- Utilidades ----------------------------------------------------------
   private findIndex(id: string): number {
     const index = this.products.findIndex((p) => p.id === id);
@@ -319,13 +222,5 @@ export class MockProductRepository implements IProductRepository {
       if (codeIndex !== -1) return { productIndex, codeIndex };
     }
     throw new Error(`Código ${codeId} no encontrado`);
-  }
-
-  private findPresentation(unitId: string): { productIndex: number; unitIndex: number } {
-    for (let productIndex = 0; productIndex < this.products.length; productIndex += 1) {
-      const unitIndex = this.products[productIndex].units.findIndex((u) => u.id === unitId);
-      if (unitIndex !== -1) return { productIndex, unitIndex };
-    }
-    throw new Error(`Presentación ${unitId} no encontrada`);
   }
 }

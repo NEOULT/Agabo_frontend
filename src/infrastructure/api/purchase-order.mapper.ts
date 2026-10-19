@@ -5,7 +5,6 @@ export interface ApiPurchaseOrderDetail {
   purchase_order_detail_uuid: string;
   purchase_order_uuid: string;
   product_uuid: string;
-  product_unit_uuid: string;
   purchase_order_detail_quantity_num: number;
   purchase_order_detail_unit_price_num: number;
   purchase_order_detail_line_total_num: number;
@@ -55,7 +54,6 @@ export function toPurchaseOrderDetail(apiDetail: ApiPurchaseOrderDetail): Purcha
     id: apiDetail.purchase_order_detail_uuid,
     order_id: apiDetail.purchase_order_uuid,
     product_id: apiDetail.product_uuid,
-    product_unit_id: apiDetail.product_unit_uuid,
     quantity: apiDetail.purchase_order_detail_quantity_num,
     unit_price: apiDetail.purchase_order_detail_unit_price_num,
     line_total: apiDetail.purchase_order_detail_line_total_num,

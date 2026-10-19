@@ -13,8 +13,6 @@ export interface PriceProductQueryParams {
   priceListId?: string;
   /** Filtro exacto por producto (product_uuid). */
   productId?: string;
-  /** Filtro exacto por presentación (product_unit_uuid). */
-  productUnitId?: string;
   /** Filtro por estado (price_product_is_active_bl). */
   isActive?: boolean;
 }
@@ -22,8 +20,7 @@ export interface PriceProductQueryParams {
 /**
  * Contrato de precios de producto (catalog.price_product).
  *
- * Liga una lista de precios con una presentación de un producto (RF-CAT-023 a
- * RF-CAT-026). No existe `delete`: el precio se retira con desactivación.
+ * Liga una lista de precios con un producto (RF-CAT-023 a RF-CAT-026). No existe `delete`: el precio se retira con desactivación.
  *
  * El punto de venta usa `getAll` para armar el mapa de precios de la sucursal
  * activa; la administración completa vive en el módulo de precios.

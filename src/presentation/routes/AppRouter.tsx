@@ -142,7 +142,7 @@ export function AppRouter() {
             <Route path="/catalog/units" element={<UnitListPage />} />
           </Route>
 
-          {/* Listas de precios y sus precios por producto y presentación */}
+          {/* Listas de precios y sus precios por producto */}
           <Route
             element={
               <PermissionGuard

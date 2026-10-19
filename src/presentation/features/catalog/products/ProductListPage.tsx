@@ -18,8 +18,8 @@ import type { Product } from '@/domain/models';
 /**
  * Catálogo de productos (catalog.product).
  *
- * Muestra los productos con su categoría, marca, código principal y número de
- * presentaciones. Los productos no se eliminan: se activan/desactivan.
+ * Muestra los productos con su categoría, marca y código principal. Los
+ * productos no se eliminan: se activan/desactivan.
  */
 export function ProductListPage() {
   const navigate = useNavigate();
@@ -101,14 +101,6 @@ export function ProductListPage() {
       key: 'brand_id',
       header: 'Marca',
       cell: (p) => <span className="text-text-secondary">{brandName(p.brand_id) ?? '—'}</span>,
-    },
-    {
-      key: 'units',
-      header: 'Presentaciones',
-      align: 'center',
-      cell: (p) => (
-        <span className="text-text-secondary">{p.units.length}</span>
-      ),
     },
     {
       key: 'is_active',

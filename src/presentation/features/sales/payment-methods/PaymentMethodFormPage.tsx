@@ -12,7 +12,8 @@ import { validate, required, minLength, maxLength } from '@/shared/utils/validat
 /**
  * Formulario de métodos de pago (crear / editar).
  *
- * Solo el nombre es editable (RF-SAL-005/RF-SAL-007); la empresa sale del token.
+ * El nombre y la comision son editables (RF-SAL-005/RF-SAL-007); la empresa sale
+ * del token. La comision se expresa como fraccion de la venta, entre 0 y 1.
  */
 export function PaymentMethodFormPage() {
   const navigate = useNavigate();
@@ -22,7 +23,9 @@ export function PaymentMethodFormPage() {
   const { getPaymentMethod, createPaymentMethod, updatePaymentMethod } = usePaymentMethods();
 
   const [name, setName] = React.useState('');
+  const [commissionRate, setCommissionRate] = React.useState('0');
   const [error, setError] = React.useState<string | undefined>(undefined);
+  const [commissionError, setCommissionError] = React.useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = React.useState(isEdit);
   const [isSaving, setIsSaving] = React.useState(false);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -41,6 +44,7 @@ export function PaymentMethodFormPage() {
           return;
         }
         setName(paymentMethod.name);
+        setCommissionRate(String(paymentMethod.commission_rate));
       })
       .catch((err) => {
         if (!cancelled) {
@@ -69,14 +73,21 @@ export function PaymentMethodFormPage() {
       return;
     }
 
+    const rate = commissionRate.trim() === '' ? 0 : Number(commissionRate);
+    if (Number.isNaN(rate) || rate < 0 || rate > 1) {
+      setCommissionError('La comisión debe ser un número entre 0 y 1.');
+      return;
+    }
+    setCommissionError(undefined);
+
     setIsSaving(true);
     try {
       const trimmed = name.trim();
       if (isEdit && id) {
-        await updatePaymentMethod(id, { name: trimmed });
+        await updatePaymentMethod(id, { name: trimmed, commission_rate: rate });
         toast.success(`El método "${trimmed}" fue actualizado.`);
       } else {
-        await createPaymentMethod({ name: trimmed });
+        await createPaymentMethod({ name: trimmed, commission_rate: rate });
         toast.success(`El método "${trimmed}" fue creado.`);
       }
       navigate('/sales/payment-methods');
@@ -134,6 +145,22 @@ export function PaymentMethodFormPage() {
             helperText="Es la forma en que el cliente paga la venta."
             required
             maxLength={200}
+          />
+
+          <Input
+            label="Comisión"
+            type="number"
+            min="0"
+            max="1"
+            step="0.0001"
+            placeholder="Ej: 0.035"
+            value={commissionRate}
+            onChange={(e) => {
+              setCommissionRate(e.target.value);
+              if (commissionError) setCommissionError(undefined);
+            }}
+            error={commissionError}
+            helperText="Fracción de la venta que asume el vendedor, entre 0 y 1. Ej: 0.035 = 3,5 %."
           />
 
           <div className="flex items-center justify-end gap-3 pt-2">

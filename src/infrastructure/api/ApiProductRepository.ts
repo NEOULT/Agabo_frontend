@@ -2,23 +2,18 @@ import type { IProductRepository, ProductQueryParams } from '@/domain/repositori
 import type {
   Product,
   ProductCode,
-  ProductUnit,
   CreateProductDTO,
   UpdateProductDTO,
   CreateProductCodeDTO,
   UpdateProductCodeDTO,
-  CreatePresentationDTO,
-  UpdatePresentationDTO,
 } from '@/domain/models';
 import { api } from './client';
 import { toApiError } from './errors';
 import {
   toProduct,
   toProductCode,
-  toProductUnit,
   type ApiProduct,
   type ApiProductCode,
-  type ApiProductUnit,
   type ApiProductListResponse,
 } from './product.mapper';
 
@@ -26,12 +21,9 @@ import {
  * Implementación REST del catálogo de productos contra el backend Express
  * (módulo `catalog`, ver `docs/schema-catalog/api-contract-product.md`).
  *
- * Cubre tres endpoints relacionados:
+ * Cubre dos endpoints relacionados:
  * - `/products`        → producto (CRUD + ciclo de vida)
  * - `/product-codes`   → códigos SKU / barras (crear, editar, retirar)
- * - `/product-units`   → presentaciones (crear, editar, ciclo de vida)
- *
- * El backend crea automáticamente la presentación base al crear el producto.
  */
 export class ApiProductRepository implements IProductRepository {
   // --- Productos -----------------------------------------------------------
@@ -149,53 +141,6 @@ export class ApiProductRepository implements IProductRepository {
   async removeCode(id: string): Promise<void> {
     try {
       await api.delete(`/product-codes/${id}`);
-    } catch (error) {
-      throw toApiError(error);
-    }
-  }
-
-  // --- Presentaciones ------------------------------------------------------
-  async createPresentation(data: CreatePresentationDTO): Promise<ProductUnit> {
-    try {
-      const { data: created } = await api.post<ApiProductUnit>('/product-units', {
-        product_uuid: data.product_id,
-        unit_uuid: data.unit_id,
-        product_unit_name_text: data.name,
-        product_unit_factor_num: data.factor,
-      });
-      return toProductUnit(created);
-    } catch (error) {
-      throw toApiError(error);
-    }
-  }
-
-  async updatePresentation(id: string, data: UpdatePresentationDTO): Promise<ProductUnit> {
-    try {
-      // product_uuid y unit_uuid no son editables; solo name y factor.
-      const payload: Record<string, string | number> = {};
-      if (data.name !== undefined) payload.product_unit_name_text = data.name;
-      if (data.factor !== undefined) payload.product_unit_factor_num = data.factor;
-
-      const { data: updated } = await api.patch<ApiProductUnit>(`/product-units/${id}`, payload);
-      return toProductUnit(updated);
-    } catch (error) {
-      throw toApiError(error);
-    }
-  }
-
-  async setPresentationActive(id: string): Promise<ProductUnit> {
-    try {
-      const { data } = await api.post<ApiProductUnit>(`/product-units/${id}/activate`);
-      return toProductUnit(data);
-    } catch (error) {
-      throw toApiError(error);
-    }
-  }
-
-  async setPresentationInactive(id: string): Promise<ProductUnit> {
-    try {
-      const { data } = await api.post<ApiProductUnit>(`/product-units/${id}/deactivate`);
-      return toProductUnit(data);
     } catch (error) {
       throw toApiError(error);
     }

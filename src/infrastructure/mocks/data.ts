@@ -1,5 +1,5 @@
 import type { Product } from '@/domain/models/product';
-import type { ProductCode, ProductUnit } from '@/domain/models/product';
+import type { ProductCode } from '@/domain/models/product';
 import type { Unit } from '@/domain/models/unit';
 import type { Category } from '@/domain/models/category';
 import type { Brand } from '@/domain/models/brand';
@@ -249,27 +249,7 @@ function mockCode(
   };
 }
 
-function mockPresentation(
-  id: string,
-  productId: string,
-  unitId: string,
-  name: string,
-  factor: number,
-  isActive = true,
-): ProductUnit {
-  return {
-    id,
-    product_id: productId,
-    unit_id: unitId,
-    name,
-    factor,
-    is_active: isActive,
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2024-06-15T00:00:00Z',
-  };
-}
-
-// 📦 Productos (catalog.product) con sus códigos y presentaciones
+// 📦 Productos (catalog.product) con sus códigos
 export const MOCK_PRODUCTS: Product[] = [
   {
     id: 'prod-001',
@@ -283,10 +263,6 @@ export const MOCK_PRODUCTS: Product[] = [
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-06-15T00:00:00Z',
     codes: [mockCode('pcode-001', 'prod-001', 'LEC-001')],
-    units: [
-      mockPresentation('punit-001', 'prod-001', 'unit-004', 'Litro', 1),
-      mockPresentation('punit-002', 'prod-001', 'unit-002', 'Caja x 12', 12),
-    ],
   },
   {
     id: 'prod-002',
@@ -300,7 +276,6 @@ export const MOCK_PRODUCTS: Product[] = [
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-06-15T00:00:00Z',
     codes: [mockCode('pcode-002', 'prod-002', 'PAN-001')],
-    units: [mockPresentation('punit-003', 'prod-002', 'unit-001', 'Unidad', 1)],
   },
   {
     id: 'prod-003',
@@ -314,10 +289,6 @@ export const MOCK_PRODUCTS: Product[] = [
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-06-15T00:00:00Z',
     codes: [mockCode('pcode-003', 'prod-003', 'ARR-001')],
-    units: [
-      mockPresentation('punit-004', 'prod-003', 'unit-003', 'Kilogramo', 1),
-      mockPresentation('punit-005', 'prod-003', 'unit-002', 'Bulto x 50kg', 50),
-    ],
   },
   {
     id: 'prod-004',
@@ -330,7 +301,6 @@ export const MOCK_PRODUCTS: Product[] = [
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-06-15T00:00:00Z',
     codes: [mockCode('pcode-004', 'prod-004', 'ACE-001')],
-    units: [mockPresentation('punit-006', 'prod-004', 'unit-004', 'Litro', 1)],
   },
   {
     id: 'prod-005',
@@ -343,7 +313,6 @@ export const MOCK_PRODUCTS: Product[] = [
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-06-15T00:00:00Z',
     codes: [mockCode('pcode-005', 'prod-005', 'JAB-001')],
-    units: [mockPresentation('punit-007', 'prod-005', 'unit-001', 'Unidad', 1)],
   },
   {
     id: 'prod-006',
@@ -356,7 +325,6 @@ export const MOCK_PRODUCTS: Product[] = [
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-06-15T00:00:00Z',
     codes: [mockCode('pcode-006', 'prod-006', 'GAS-001')],
-    units: [mockPresentation('punit-008', 'prod-006', 'unit-001', 'Unidad', 1)],
   },
 ];
 
@@ -470,7 +438,6 @@ export const MOCK_PURCHASE_ORDERS: PurchaseOrder[] = [
         id: 'detail-001',
         order_id: 'order-001',
         product_id: 'prod-001',
-        product_unit_id: 'punit-002',
         quantity: 10,
         unit_price: 2800,
         line_total: 28000,
@@ -480,7 +447,6 @@ export const MOCK_PURCHASE_ORDERS: PurchaseOrder[] = [
         id: 'detail-002',
         order_id: 'order-001',
         product_id: 'prod-005',
-        product_unit_id: 'punit-007',
         quantity: 20,
         unit_price: 280,
         line_total: 5600,
@@ -503,7 +469,6 @@ export const MOCK_PURCHASE_ORDERS: PurchaseOrder[] = [
         id: 'detail-003',
         order_id: 'order-002',
         product_id: 'prod-003',
-        product_unit_id: 'punit-004',
         quantity: 10,
         unit_price: 900,
         line_total: 9000,
@@ -529,7 +494,6 @@ export const MOCK_PURCHASE_RECEIPTS: PurchaseReceipt[] = [
         id: 'detail-003',
         order_id: 'order-002',
         product_id: 'prod-003',
-        product_unit_id: 'punit-004',
         quantity: 10,
         unit_price: 900,
         line_total: 9000,

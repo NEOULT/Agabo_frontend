@@ -1,5 +1,5 @@
 import type { ParkedSaleLine } from '@/application/stores/useParkedSalesStore';
-import type { CreateSaleDetailDTO, Product, ProductUnit } from '@/domain/models';
+import type { CreateSaleDetailDTO, Product } from '@/domain/models';
 import type { CartLine, PosStockLevel, PosStockLevels } from './pos.types';
 
 /**
@@ -35,23 +35,9 @@ export function roundQuantity(value: number): number {
   return Math.round((value + Number.EPSILON) * 10000) / 10000;
 }
 
-/** Unidades base de una línea (cantidad × factor de la presentación). */
-export function baseQuantity(line: { quantity: number; unit_factor: number }): number {
-  const factor = line.unit_factor > 0 ? line.unit_factor : 1;
-  return roundQuantity(line.quantity * factor);
-}
-
-/**
- * Existencia expresada en la presentación indicada. Con una presentación mayor
- * (factor > 1) no se muestran fracciones: 14 unidades base son 1 "Caja x 12".
- */
-export function availableInUnits(availableInBase: number, factor: number): number {
-  return factor > 1 ? Math.floor(availableInBase / factor) : availableInBase;
-}
-
-/** Clave de agrupación producto + presentación: dos líneas iguales se suman. */
-export function cartLineKey(productId: string, productUnitId: string): string {
-  return `${productId}:${productUnitId}`;
+/** Clave de agrupación por producto: dos líneas iguales se suman. */
+export function cartLineKey(productId: string): string {
+  return productId;
 }
 
 let lineCounter = 0;
@@ -66,21 +52,6 @@ let parkedCounter = 0;
 export function nextParkedTicketId(): string {
   parkedCounter += 1;
   return `parked-${Date.now()}-${parkedCounter}`;
-}
-
-/** Presentación por defecto: la base si está activa, si no la primera activa. */
-export function defaultUnit(product: Product): ProductUnit | undefined {
-  return (
-    product.units.find((unit) => unit.is_active && unit.id === product.base_unit_id) ??
-    product.units.find((unit) => unit.is_active)
-  );
-}
-
-/** Presentaciones activas listas para el selector de una línea del carrito. */
-export function activeUnitOptions(product: Product | undefined): { value: string; label: string }[] {
-  return (product?.units ?? [])
-    .filter((unit) => unit.is_active)
-    .map((unit) => ({ value: unit.id, label: `${unit.name} (×${unit.factor})` }));
 }
 
 /** ¿El producto coincide con el término por nombre o por código? */
@@ -128,9 +99,8 @@ export function cartItemsCount(lines: CartLine[]): number {
  * ubicación con más existencia y, si hace falta, se parte en varias líneas del
  * mismo producto: el backend descuenta cada una de su ubicación.
  *
- * La existencia está en unidades base y la línea en su presentación, así que el
- * reparto se hace en unidades base y cada trozo vuelve a la presentación (media
- * caja es una línea válida si la ubicación solo tiene media caja).
+ * La cantidad de la línea ya está en la unidad base del producto, igual que la
+ * existencia, así que el reparto se hace directamente.
  */
 function allocateLine(
   line: CartLine,
@@ -138,10 +108,8 @@ function allocateLine(
 ): CreateSaleDetailDTO[] {
   const base = {
     product_id: line.product_id,
-    product_unit_id: line.product_unit_id,
     unit_price: line.unit_price,
   };
-  const factor = line.unit_factor > 0 ? line.unit_factor : 1;
 
   // Sin dato de existencias (sin permiso de inventario o consulta fallida) se
   // envía la línea sin ubicación y el backend sigue validando la existencia.
@@ -151,7 +119,7 @@ function allocateLine(
 
   const byQuantity = [...level.locations].sort((a, b) => b.quantity - a.quantity);
   const details: CreateSaleDetailDTO[] = [];
-  let remaining = baseQuantity(line);
+  let remaining = line.quantity;
 
   for (const location of byQuantity) {
     if (remaining <= 0) break;
@@ -160,7 +128,7 @@ function allocateLine(
     details.push({
       ...base,
       location_id: location.location_id,
-      quantity: roundQuantity(take / factor),
+      quantity: roundQuantity(take),
     });
     remaining = roundQuantity(remaining - take);
   }
@@ -171,7 +139,7 @@ function allocateLine(
     details.push({
       ...base,
       location_id: byQuantity[0].location_id,
-      quantity: roundQuantity(remaining / factor),
+      quantity: roundQuantity(remaining),
     });
   }
 
@@ -180,8 +148,7 @@ function allocateLine(
 
 /**
  * Detalle que viaja al backend al registrar la venta (RN-SAL-009), imputado a
- * las ubicaciones del almacén de origen y en la presentación vendida (el
- * backend lo pasa a unidades base con el factor).
+ * las ubicaciones del almacén de origen y en la unidad base del producto.
  */
 export function toSaleDetails(
   lines: CartLine[],
@@ -190,7 +157,6 @@ export function toSaleDetails(
   if (!stock) {
     return lines.map((line) => ({
       product_id: line.product_id,
-      product_unit_id: line.product_unit_id,
       quantity: line.quantity,
       unit_price: line.unit_price,
     }));
@@ -203,24 +169,15 @@ export function toSaleDetails(
 export function toParkedLines(lines: CartLine[]): ParkedSaleLine[] {
   return lines.map((line) => ({
     product_id: line.product_id,
-    product_unit_id: line.product_unit_id,
     product_name: line.product_name,
     unit_name: line.unit_name,
-    unit_factor: line.unit_factor,
     quantity: line.quantity,
     unit_price: line.unit_price,
     is_hidden: line.is_hidden,
   }));
 }
 
-/**
- * Vuelve a armar el carrito desde un ticket en espera, con claves nuevas. Los
- * tickets guardados antes de conocer el factor se leen como presentación base.
- */
+/** Vuelve a armar el carrito desde un ticket en espera, con claves nuevas. */
 export function fromParkedLines(lines: ParkedSaleLine[]): CartLine[] {
-  return lines.map((line) => ({
-    ...line,
-    unit_factor: line.unit_factor > 0 ? line.unit_factor : 1,
-    key: nextCartLineKey(),
-  }));
+  return lines.map((line) => ({ ...line, key: nextCartLineKey() }));
 }

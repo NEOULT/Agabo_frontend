@@ -6,18 +6,15 @@ import type {
   UpdateProductDTO,
   CreateProductCodeDTO,
   UpdateProductCodeDTO,
-  CreatePresentationDTO,
-  UpdatePresentationDTO,
 } from '@/domain/models';
 import type { ProductQueryParams } from '@/domain/repositories';
 
 /**
  * Catálogo de productos (catalog.product).
  *
- * Incluye las operaciones de sus sub-entidades (códigos y presentaciones),
- * que se administran desde el detalle del producto. Tras cada cambio en una
- * sub-entidad se refresca el producto seleccionado para mantener los datos
- * al día.
+ * Incluye las operaciones de sus sub-entidades (códigos), que se administran
+ * desde el detalle del producto. Tras cada cambio se refresca el producto
+ * seleccionado para mantener los datos al día.
  */
 export function useProducts() {
   const { products: productRepo } = useRepositories();
@@ -105,31 +102,6 @@ export function useProducts() {
     await refreshSelected(productId);
   }, [productRepo, refreshSelected]);
 
-  // --- Presentaciones ------------------------------------------------------
-  const createPresentation = useCallback(async (data: CreatePresentationDTO) => {
-    const presentation = await productRepo.createPresentation(data);
-    await refreshSelected(data.product_id);
-    return presentation;
-  }, [productRepo, refreshSelected]);
-
-  const updatePresentation = useCallback(async (productId: string, id: string, data: UpdatePresentationDTO) => {
-    const presentation = await productRepo.updatePresentation(id, data);
-    await refreshSelected(productId);
-    return presentation;
-  }, [productRepo, refreshSelected]);
-
-  const activatePresentation = useCallback(async (productId: string, id: string) => {
-    const presentation = await productRepo.setPresentationActive(id);
-    await refreshSelected(productId);
-    return presentation;
-  }, [productRepo, refreshSelected]);
-
-  const deactivatePresentation = useCallback(async (productId: string, id: string) => {
-    const presentation = await productRepo.setPresentationInactive(id);
-    await refreshSelected(productId);
-    return presentation;
-  }, [productRepo, refreshSelected]);
-
   return {
     products,
     selectedProduct,
@@ -144,9 +116,5 @@ export function useProducts() {
     createCode,
     updateCode,
     removeCode,
-    createPresentation,
-    updatePresentation,
-    activatePresentation,
-    deactivatePresentation,
   };
 }

@@ -12,7 +12,7 @@
 /** Estado derivado de la orden (RF-PUR-017). */
 export type PurchaseOrderStatus = 'pending' | 'received';
 
-/** 📋 Línea de la orden: producto, presentación, cantidad y precio congelado. */
+/** 📋 Línea de la orden: producto, cantidad y precio congelado. */
 export interface PurchaseOrderDetail {
   /** purchase_order_detail_uuid */
   id: string;
@@ -20,8 +20,6 @@ export interface PurchaseOrderDetail {
   order_id: string;
   /** product_uuid */
   product_id: string;
-  /** product_unit_uuid — presentación pedida */
-  product_unit_id: string;
   /** purchase_order_detail_quantity_num — > 0 */
   quantity: number;
   /** purchase_order_detail_unit_price_num — >= 0 */
@@ -60,7 +58,6 @@ export interface PurchaseOrder {
 /** Línea al crear una orden: sin importes calculados (los calcula el backend). */
 export interface CreatePurchaseOrderDetailDTO {
   product_id: string;
-  product_unit_id: string;
   quantity: number;
   unit_price: number;
 }

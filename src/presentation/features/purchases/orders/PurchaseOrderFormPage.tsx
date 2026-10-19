@@ -12,13 +12,11 @@ import { useProducts } from '@/application/hooks/useProducts';
 import { useBranches } from '@/application/hooks/useBranches';
 import { toast } from '@/application/stores/useToastStore';
 import { formatCurrency } from '@/shared/utils/format';
-import type { Product } from '@/domain/models';
 
 interface LineDraft {
   /** Clave local para React (no se envía al backend). */
   key: string;
   product_id: string;
-  product_unit_id: string;
   quantity: string;
   unit_price: string;
 }
@@ -27,7 +25,6 @@ function emptyLine(): LineDraft {
   return {
     key: `line-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     product_id: '',
-    product_unit_id: '',
     quantity: '1',
     unit_price: '0',
   };
@@ -69,8 +66,6 @@ export function PurchaseOrderFormPage() {
     if (activeBranch?.is_active && !branchId) setBranchId(activeBranch.id);
   }, [activeBranch, branchId]);
 
-  const productById = (id: string): Product | undefined => products.find((p) => p.id === id);
-
   const lineTotal = (line: LineDraft) => {
     const quantity = Number(line.quantity);
     const price = Number(line.unit_price);
@@ -106,9 +101,6 @@ export function PurchaseOrderFormPage() {
 
     lines.forEach((line) => {
       if (!line.product_id) validationErrors[`${line.key}-product`] = 'Selecciona un producto.';
-      if (!line.product_unit_id) {
-        validationErrors[`${line.key}-unit`] = 'Selecciona una presentación.';
-      }
       const quantity = Number(line.quantity);
       if (Number.isNaN(quantity) || quantity <= 0) {
         validationErrors[`${line.key}-quantity`] = 'La cantidad debe ser mayor que cero.';
@@ -130,7 +122,6 @@ export function PurchaseOrderFormPage() {
         note: note.trim() || undefined,
         details: lines.map((line) => ({
           product_id: line.product_id,
-          product_unit_id: line.product_unit_id,
           quantity: Number(line.quantity),
           unit_price: Number(line.unit_price),
         })),
@@ -163,7 +154,7 @@ export function PurchaseOrderFormPage() {
       {!canSubmit && (
         <div className="mb-4 rounded-lg border border-semantic-warning-400 bg-semantic-warning-50 px-4 py-3 text-sm text-semantic-warning-800">
           Para registrar una orden necesitas al menos un proveedor activo, una sucursal activa y un
-          producto activo con su presentación.
+          producto activo.
         </div>
       )}
 
@@ -226,12 +217,6 @@ export function PurchaseOrderFormPage() {
 
           <div className="space-y-4">
             {lines.map((line, index) => {
-              const product = productById(line.product_id);
-              // Solo presentaciones activas del producto elegido
-              const presentationOptions = (product?.units ?? [])
-                .filter((u) => u.is_active)
-                .map((u) => ({ value: u.id, label: `${u.name} (×${u.factor})` }));
-
               return (
                 <div
                   key={line.key}
@@ -251,17 +236,11 @@ export function PurchaseOrderFormPage() {
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-                    <div className="lg:col-span-5">
+                    <div className="lg:col-span-7">
                       <Select
                         label="Producto"
                         value={line.product_id}
-                        onChange={(e) =>
-                          updateLine(line.key, {
-                            product_id: e.target.value,
-                            // Al cambiar de producto se reinicia la presentación
-                            product_unit_id: '',
-                          })
-                        }
+                        onChange={(e) => updateLine(line.key, { product_id: e.target.value })}
                         options={activeProducts.map((p) => ({ value: p.id, label: p.name }))}
                         placeholder="Selecciona un producto"
                         error={errors[`${line.key}-product`] || undefined}
@@ -269,18 +248,6 @@ export function PurchaseOrderFormPage() {
                       />
                     </div>
                     <div className="lg:col-span-3">
-                      <Select
-                        label="Presentación"
-                        value={line.product_unit_id}
-                        onChange={(e) => updateLine(line.key, { product_unit_id: e.target.value })}
-                        options={presentationOptions}
-                        placeholder={product ? 'Selecciona' : 'Elige un producto'}
-                        error={errors[`${line.key}-unit`] || undefined}
-                        disabled={!product}
-                        required
-                      />
-                    </div>
-                    <div className="lg:col-span-2">
                       <Input
                         label="Cantidad"
                         type="number"

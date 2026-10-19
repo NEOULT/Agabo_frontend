@@ -2,13 +2,10 @@ export type {
   Product,
   ProductCode,
   ProductCodeType,
-  ProductUnit,
   CreateProductDTO,
   UpdateProductDTO,
   CreateProductCodeDTO,
   UpdateProductCodeDTO,
-  CreatePresentationDTO,
-  UpdatePresentationDTO,
 } from './product';
 
 export type { Unit, CreateUnitDTO, UpdateUnitDTO } from './unit';

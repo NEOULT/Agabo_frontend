@@ -66,7 +66,6 @@ export class ApiSaleRepository implements ISaleRepository {
         sale_note_text: data.note ?? null,
         details: data.details.map((line) => ({
           product_uuid: line.product_id,
-          product_unit_uuid: line.product_unit_id,
           location_uuid: line.location_id ?? null,
           sale_detail_quantity_num: line.quantity,
           // Si se omite, el backend propone el precio desde catalog.price_product.
@@ -86,7 +85,6 @@ export class ApiSaleRepository implements ISaleRepository {
       const query: Record<string, string> = {};
       if (params?.saleId) query.sale_uuid = params.saleId;
       if (params?.productId) query.product_uuid = params.productId;
-      if (params?.productUnitId) query.product_unit_uuid = params.productUnitId;
       if (params?.fromDate) query.sale_detail_created_at_tsz_from = params.fromDate;
       if (params?.toDate) query.sale_detail_created_at_tsz_to = params.toDate;
 
