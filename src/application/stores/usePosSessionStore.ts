@@ -23,6 +23,8 @@ import { cartLineKey } from '@/application/hooks/pos/pos.utils';
 interface PosSessionState {
   lines: CartLine[];
   warehouseId: string;
+  /** Ubicación del almacén de origen de la venta (vacío = sin ubicación). */
+  locationId: string;
   customerId: string;
   note: string;
   paymentMethodId: string;
@@ -39,6 +41,7 @@ interface PosSessionState {
   clearLines: () => void;
 
   setWarehouseId: (warehouseId: string) => void;
+  setLocationId: (locationId: string) => void;
   setCustomerId: (customerId: string) => void;
   setNote: (note: string) => void;
   setPaymentMethodId: (paymentMethodId: string) => void;
@@ -51,6 +54,7 @@ export const usePosSessionStore = create<PosSessionState>()(
     (set) => ({
       lines: [],
       warehouseId: '',
+      locationId: '',
       customerId: '',
       note: '',
       paymentMethodId: '',
@@ -97,6 +101,7 @@ export const usePosSessionStore = create<PosSessionState>()(
       clearLines: () => set({ lines: [] }),
 
       setWarehouseId: (warehouseId) => set({ warehouseId }),
+      setLocationId: (locationId) => set({ locationId }),
       setCustomerId: (customerId) => set({ customerId }),
       setNote: (note) => set({ note }),
       setPaymentMethodId: (paymentMethodId) => set({ paymentMethodId }),

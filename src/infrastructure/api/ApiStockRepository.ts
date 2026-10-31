@@ -30,6 +30,7 @@ export class ApiStockRepository implements IStockRepository {
       const query: Record<string, string> = {};
       if (params?.productId) query.product_uuid = params.productId;
       if (params?.warehouseId) query.warehouse_uuid = params.warehouseId;
+      if (params?.locationId) query.location_uuid = params.locationId;
       if (params?.isActive !== undefined) query.stock_is_active_bl = String(params.isActive);
 
       const { data } = await api.get<ApiStockListResponse>('/stocks', { params: query });
@@ -79,6 +80,7 @@ export class ApiStockRepository implements IStockRepository {
       const { data: created } = await api.post<ApiStock>('/stocks', {
         product_uuid: data.product_id,
         warehouse_uuid: data.warehouse_id,
+        location_uuid: data.location_id ?? null,
         stock_quantity_num: data.quantity,
       });
       return toStock(created);
@@ -92,6 +94,7 @@ export class ApiStockRepository implements IStockRepository {
       // product_uuid y warehouse_uuid no son editables (RF-INV-011).
       const payload: Record<string, number | string | null> = {};
       if (data.quantity !== undefined) payload.stock_quantity_num = data.quantity;
+      if (data.location_id !== undefined) payload.location_uuid = data.location_id;
 
       const { data: updated } = await api.patch<ApiStock>(`/stocks/${id}`, payload);
       return toStock(updated);

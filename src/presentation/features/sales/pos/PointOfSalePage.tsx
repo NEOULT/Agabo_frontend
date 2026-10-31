@@ -25,6 +25,7 @@ import { useBranches } from '@/application/hooks/useBranches';
 import { usePrices } from '@/application/hooks/usePrices';
 import { useCurrencies } from '@/application/hooks/useCurrencies';
 import { useUnits } from '@/application/hooks/useUnits';
+import { useLocations } from '@/application/hooks/useLocations';
 import { usePermissions } from '@/application/hooks/usePermissions';
 import { useParkedTickets } from '@/application/hooks/pos/useParkedTickets';
 import { usePosCart } from '@/application/hooks/pos/usePosCart';
@@ -36,7 +37,11 @@ import type {
   PhoneScanOutcome,
   PosPendingConfirm,
 } from '@/application/hooks/pos/pos.types';
-import { findByExactCode, searchProducts } from '@/application/hooks/pos/pos.utils';
+import {
+  findByExactCode,
+  formatQuantity,
+  searchProducts,
+} from '@/application/hooks/pos/pos.utils';
 import { toast } from '@/application/stores/useToastStore';
 import { usePosSessionStore } from '@/application/stores/usePosSessionStore';
 import type { Product } from '@/domain/models';
@@ -84,6 +89,7 @@ export function PointOfSalePage() {
   const { getPrice, loadPrices, error: pricesError } = usePrices();
   const { currencies, fetchCurrencies, error: currenciesError } = useCurrencies();
   const { units, fetchUnits } = useUnits();
+  const { locations, fetchLocations } = useLocations();
 
   const { can } = usePermissions();
   const canSell = can('sales.sales:create') && can('sales.payments:create');
@@ -103,6 +109,8 @@ export function PointOfSalePage() {
 
   const warehouseId = usePosSessionStore((state) => state.warehouseId);
   const setWarehouseId = usePosSessionStore((state) => state.setWarehouseId);
+  const locationId = usePosSessionStore((state) => state.locationId) ?? '';
+  const setLocationId = usePosSessionStore((state) => state.setLocationId);
   const customerId = usePosSessionStore((state) => state.customerId);
   const setCustomerId = usePosSessionStore((state) => state.setCustomerId);
   const note = usePosSessionStore((state) => state.note);
@@ -182,6 +190,7 @@ export function PointOfSalePage() {
     lastSale,
     dismissLastSale,
     availability,
+    stockByLocation,
     isStockLoading,
   } = usePosCheckout({
     lines: billableLines,
@@ -194,6 +203,7 @@ export function PointOfSalePage() {
     paymentMethodId,
     paymentCurrencyId: paymentCurrency?.id ?? '',
     paymentCurrencyAmount,
+    locationId: locationId || null,
     canSell,
     // La venta ya existe pero el pago falló: se libera el carrito y se completa
     // desde el historial.
@@ -212,9 +222,19 @@ export function PointOfSalePage() {
       note,
       branch_id: branchId,
       warehouse_id: warehouseId,
+      location_id: locationId,
       payment_method_id: paymentMethodId,
     }),
-    [activeCustomers, branchId, cartLines, customerId, note, paymentMethodId, warehouseId],
+    [
+      activeCustomers,
+      branchId,
+      cartLines,
+      customerId,
+      locationId,
+      note,
+      paymentMethodId,
+      warehouseId,
+    ],
   );
 
   const restoreSnapshot = React.useCallback(
@@ -225,6 +245,7 @@ export function PointOfSalePage() {
       setPaymentMethodId(sale.payment_method_id);
       if (sale.branch_id) setBranchId(sale.branch_id);
       if (sale.warehouse_id) setWarehouseId(sale.warehouse_id);
+      if (sale.location_id !== undefined) setLocationId(sale.location_id);
       setAmountEdited(false);
       dismissLastSale();
       setIsParkedOpen(false);
@@ -246,7 +267,15 @@ export function PointOfSalePage() {
     fetchPaymentMethods({ isActive: true });
     fetchCurrencies({ isActive: true });
     fetchUnits();
-  }, [fetchProducts, fetchCustomers, fetchPaymentMethods, fetchCurrencies, fetchUnits]);
+    fetchLocations({ isActive: true });
+  }, [
+    fetchProducts,
+    fetchCustomers,
+    fetchPaymentMethods,
+    fetchCurrencies,
+    fetchUnits,
+    fetchLocations,
+  ]);
 
   // Sucursal activa por defecto (la misma que acota el backend).
   React.useEffect(() => {
@@ -265,6 +294,23 @@ export function PointOfSalePage() {
     if (warehouseId && warehouses.some((w) => w.id === warehouseId)) return;
     setWarehouseId(warehouses[0]?.id ?? '');
   }, [warehouses, warehouseId]);
+
+  const activeLocations = React.useMemo(
+    () => locations.filter((location) => location.is_active),
+    [locations],
+  );
+
+  // Ubicaciones del almacén de origen: es de una de ellas de donde sale la venta.
+  const warehouseLocations = React.useMemo(
+    () => activeLocations.filter((location) => location.warehouse_id === warehouseId),
+    [activeLocations, warehouseId],
+  );
+
+  // Al cambiar de almacén, la ubicación elegida debe pertenecer a ese almacén.
+  React.useEffect(() => {
+    if (locationId && warehouseLocations.some((location) => location.id === locationId)) return;
+    setLocationId(warehouseLocations[0]?.id ?? '');
+  }, [locationId, setLocationId, warehouseLocations]);
 
   // El importe sigue el total salvo que el cajero lo haya editado a mano.
   React.useEffect(() => {
@@ -291,6 +337,45 @@ export function PointOfSalePage() {
    */
   const stockOf = (productId: string): number | undefined =>
     availability ? (availability[productId] ?? 0) : undefined;
+
+  const selectedLocationId = locationId || null;
+
+  /** Existencia del producto en la ubicación de origen elegida para la venta. */
+  const stockAtLocation = (productId: string, targetLocationId: string | null): number =>
+    stockByLocation?.[productId]?.find(
+      (level) => level.location_id === targetLocationId,
+    )?.quantity ?? 0;
+
+  /** Existencia de la línea en la ubicación de origen del cobro. */
+  const availableAtSaleLocation = (line: CartLine): number | undefined =>
+    stockByLocation ? stockAtLocation(line.product_id, selectedLocationId) : undefined;
+
+  const locationLabel = (targetLocationId: string | null): string | undefined => {
+    const location = targetLocationId
+      ? locations.find((item) => item.id === targetLocationId)
+      : undefined;
+    return location ? `${location.code} · ${location.name}` : undefined;
+  };
+
+  // Lo que el carrito necesita de cada ubicación: sirve para ver, al elegirla,
+  // cuántas de las unidades que se están vendiendo están realmente ahí.
+  const cartUnits = billableLines.reduce((sum, line) => sum + line.quantity, 0);
+  const coveredAt = (targetLocationId: string | null): number =>
+    billableLines.reduce(
+      (sum, line) =>
+        sum + Math.min(line.quantity, stockAtLocation(line.product_id, targetLocationId)),
+      0,
+    );
+  const missingAtSelected = stockByLocation ? Math.max(0, cartUnits - coveredAt(selectedLocationId)) : 0;
+
+  // Hay existencia sin ubicación: se ofrece la opción "sin ubicación específica".
+  const hasUnlocatedStock = React.useMemo(
+    () =>
+      Object.values(stockByLocation ?? {}).some((levels) =>
+        levels.some((level) => level.location_id === null && level.quantity > 0),
+      ),
+    [stockByLocation],
+  );
 
   const handleAddProduct = (product: Product) => {
     const unitName = units.find((unit) => unit.id === product.base_unit_id)?.name ?? 'Unidad';
@@ -542,7 +627,7 @@ export function PointOfSalePage() {
                 <PosCartLineRow
                   key={line.key}
                   line={line}
-                  available={stockOf(line.product_id)}
+                  available={availableAtSaleLocation(line)}
                   baseSymbol={baseFormat.symbol}
                   formatAmount={money}
                   onQuantityChange={(current, quantity) =>
@@ -599,6 +684,41 @@ export function PointOfSalePage() {
               options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
               placeholder={
                 warehouses.length === 0 ? 'Sin almacenes activos' : 'Selecciona el almacén'
+              }
+            />
+
+            <Select
+              label="Ubicación de origen"
+              value={locationId}
+              onChange={(e) => setLocationId(e.target.value)}
+              options={[
+                ...warehouseLocations.map((location) => ({
+                  value: location.id,
+                  // Con carrito, muestra cuántas de sus unidades hay en esa ubicación.
+                  label:
+                    cartUnits > 0
+                      ? `${location.code} · ${location.name} — ${formatQuantity(coveredAt(location.id))} de ${formatQuantity(cartUnits)} u.`
+                      : `${location.code} · ${location.name}`,
+                })),
+                ...(warehouseLocations.length === 0 || hasUnlocatedStock
+                  ? [{ value: '', label: 'Sin ubicación específica' }]
+                  : []),
+              ]}
+              placeholder={
+                warehouseLocations.length === 0
+                  ? 'Este almacén no tiene ubicaciones'
+                  : 'Selecciona la ubicación'
+              }
+              disabled={warehouseLocations.length === 0}
+              helperText={
+                missingAtSelected > 0
+                  ? `Faltan ${formatQuantity(missingAtSelected)} unidad(es) del carrito en esta ubicación: revisa el detalle al cobrar.`
+                  : ''
+              }
+              error={
+                missingAtSelected > 0
+                  ? `Sin existencia suficiente en ${locationLabel(selectedLocationId) ?? 'esta ubicación'}.`
+                  : undefined
               }
             />
 
@@ -815,7 +935,9 @@ export function PointOfSalePage() {
         amount={parsedAmount}
         customerName={activeCustomers.find((c) => c.id === customerId)?.name}
         formatAmount={money}
-        availability={availability}
+        stockByLocation={stockByLocation}
+        locationId={selectedLocationId}
+        locationName={locationLabel(selectedLocationId)}
         isStockLoading={isStockLoading}
         paymentInCurrency={paymentInCurrencyView}
       />

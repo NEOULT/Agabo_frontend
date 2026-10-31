@@ -24,6 +24,8 @@ export interface SaleDetail {
   sale_id: string;
   /** product_uuid */
   product_id: string;
+  /** location_uuid — ubicación del almacén de la que salió la mercancía (opcional) */
+  location_id?: string | null;
   /** sale_detail_quantity_num — > 0 */
   quantity: number;
   /** sale_detail_unit_price_num — >= 0 */
@@ -95,6 +97,11 @@ export interface Sale {
 /** Línea al crear una venta: sin importes calculados (los calcula el backend). */
 export interface CreateSaleDetailDTO {
   product_id: string;
+  /**
+   * Ubicación del almacén de origen de la que sale la mercancía. Si se omite o
+   * es null, el inventario descuenta de la existencia sin ubicación.
+   */
+  location_id?: string | null;
   quantity: number;
   /**
    * Precio unitario congelado. Si se omite (o es null), el backend lo propone

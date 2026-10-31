@@ -59,6 +59,28 @@ export interface PosPendingConfirm {
 /** Existencia del almacén de origen indexada por `product_uuid`, en unidades base. */
 export type PosStockLevels = Record<string, number>;
 
+/** Existencia de un producto en una ubicación concreta (`null` = sin ubicación). */
+export interface PosLocationStock {
+  location_id: string | null;
+  /** Cantidad en la unidad base del producto. */
+  quantity: number;
+}
+
+/**
+ * Existencia del almacén de origen por producto y ubicación. El cobro elige una
+ * ubicación de origen y descuenta de ahí todas las líneas de la venta.
+ */
+export type PosStockByLocation = Record<string, PosLocationStock[]>;
+
+/** Opción del selector de ubicación del carrito, con su cantidad disponible. */
+export interface PosLocationOption {
+  /** `location_uuid`; cadena vacía cuando la existencia no tiene ubicación. */
+  value: string;
+  label: string;
+  /** Existencia del producto en esa ubicación, en unidades base. */
+  available: number;
+}
+
 /** Resumen del cobro que se acaba de registrar. */
 export interface PosLastSale {
   id: string;
@@ -80,5 +102,6 @@ export interface ParkedTicketSnapshot {
   note: string;
   branch_id: string;
   warehouse_id: string;
+  location_id: string;
   payment_method_id: string;
 }

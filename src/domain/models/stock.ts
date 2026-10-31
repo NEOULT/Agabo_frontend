@@ -23,6 +23,8 @@ export interface Stock {
   company_id: string;
   product_id: string;
   warehouse_id: string;
+  /** Ubicacion fisica dentro del almacen (opcional). */
+  location_id?: string | null;
   quantity: number;
   is_active: boolean;
   created_at: string;
@@ -64,9 +66,12 @@ export interface StockOverview {
 export interface CreateStockDTO {
   product_id: string;
   warehouse_id: string;
+  location_id?: string | null;
   quantity: number;
 }
 
 export interface UpdateStockDTO {
   quantity?: number;
+  /** Solo para reubicar una existencia existente; null la deja sin ubicacion. */
+  location_id?: string | null;
 }

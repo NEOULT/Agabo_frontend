@@ -7,4 +7,5 @@ export { MockPurchaseOrderRepository } from './MockPurchaseOrderRepository';
 export { MockPurchaseReceiptRepository } from './MockPurchaseReceiptRepository';
 export { MockBranchRepository } from './MockBranchRepository';
 export { MockWarehouseRepository } from './MockWarehouseRepository';
+export { MockLocationRepository } from './MockLocationRepository';
 export { MockAuthRepository } from './MockAuthRepository';

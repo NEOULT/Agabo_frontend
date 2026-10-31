@@ -15,6 +15,7 @@ import type {
   IPaymentRepository,
   IBranchRepository,
   IWarehouseRepository,
+  ILocationRepository,
   ICurrencyRepository,
   IMovementRepository,
   IAuthRepository,
@@ -29,6 +30,7 @@ import type {
 import { ApiAuthRepository } from '@/infrastructure/api/ApiAuthRepository';
 import { ApiBranchRepository } from '@/infrastructure/api/ApiBranchRepository';
 import { ApiWarehouseRepository } from '@/infrastructure/api/ApiWarehouseRepository';
+import { ApiLocationRepository } from '@/infrastructure/api/ApiLocationRepository';
 import { ApiCurrencyRepository } from '@/infrastructure/api/ApiCurrencyRepository';
 import { ApiSupplierRepository } from '@/infrastructure/api/ApiSupplierRepository';
 import { ApiPriceListRepository } from '@/infrastructure/api/ApiPriceListRepository';
@@ -67,6 +69,7 @@ export interface Repositories {
   payments: IPaymentRepository;
   branches: IBranchRepository;
   warehouses: IWarehouseRepository;
+  locations: ILocationRepository;
   currencies: ICurrencyRepository;
   movements: IMovementRepository;
   movementTypes: IMovementTypeRepository;
@@ -100,6 +103,7 @@ const repositories: Repositories = {
   payments: new ApiPaymentRepository(),
   branches: new ApiBranchRepository(),
   warehouses: new ApiWarehouseRepository(),
+  locations: new ApiLocationRepository(),
   currencies: new ApiCurrencyRepository(),
   movements: new ApiMovementRepository(),
   movementTypes: new ApiMovementTypeRepository(),

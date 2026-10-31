@@ -1,7 +1,7 @@
 import { ShoppingCart } from 'lucide-react';
 import { Modal } from '@/presentation/components/ui/Modal';
 import { Button } from '@/presentation/components/ui/Button';
-import type { PaymentInCurrencyView } from '@/application/hooks/pos/pos.types';
+import type { PaymentInCurrencyView, PosStockByLocation } from '@/application/hooks/pos/pos.types';
 import { formatQuantity } from '@/application/hooks/pos/pos.utils';
 
 /** Línea que se muestra en la confirmación (subconjunto del carrito). */
@@ -28,11 +28,15 @@ interface CheckoutConfirmModalProps {
   /** Pinta un importe en la moneda de visualización del POS. */
   formatAmount: (value: number) => string;
   /**
-   * Existencia por producto en el almacén de origen, **en unidades base**
-   * (`null` = todavía sin dato, por ejemplo si el usuario no tiene permiso de
-   * inventario): sin dato no se bloquea el cobro, el backend sigue validando.
+   * Existencia por producto y **ubicación** del almacén de origen, en unidades
+   * base (`null` = todavía sin dato, por ejemplo si el usuario no tiene permiso
+   * de inventario): sin dato no se bloquea el cobro, el backend sigue validando.
    */
-  availability: Record<string, number> | null;
+  stockByLocation: PosStockByLocation | null;
+  /** Ubicación del almacén de la que sale la venta (`null` = sin ubicación). */
+  locationId: string | null;
+  /** Etiqueta legible de esa ubicación, si se conoce. */
+  locationName?: string;
   isStockLoading: boolean;
   /**
    * Cobro en la moneda del cliente. `null` cuando el pago va en la moneda base
@@ -57,13 +61,15 @@ export function CheckoutConfirmModal({
   amount,
   customerName,
   formatAmount,
-  availability,
+  stockByLocation,
+  locationId,
+  locationName,
   isStockLoading,
   paymentInCurrency,
 }: CheckoutConfirmModalProps) {
-  // Cantidad total por producto, en su unidad base: el backend descuenta la
-  // existencia línea por línea, así que dos líneas del mismo producto suman
-  // sobre la misma fila.
+  // Toda la venta sale de la misma ubicación, así que la existencia se controla
+  // por producto en esa ubicación: dos líneas del mismo producto suman sobre la
+  // misma fila de inventario.
   const requiredByProduct = new Map<string, number>();
   for (const line of lines) {
     requiredByProduct.set(
@@ -72,13 +78,18 @@ export function CheckoutConfirmModal({
     );
   }
 
-  const shortages = availability
+  const availableAt = (productId: string): number =>
+    stockByLocation?.[productId]?.find(
+      (level) => level.location_id === locationId,
+    )?.quantity ?? 0;
+
+  const shortages = stockByLocation
     ? [...requiredByProduct]
-        .filter(([productId, required]) => (availability[productId] ?? 0) < required)
+        .filter(([productId, required]) => availableAt(productId) < required)
         .map(([productId, required]) => ({
           name: lines.find((line) => line.product_id === productId)?.product_name ?? 'Producto',
           required,
-          available: availability[productId] ?? 0,
+          available: availableAt(productId),
         }))
     : [];
 
@@ -115,10 +126,17 @@ export function CheckoutConfirmModal({
         </p>
       )}
 
+      <p className="mb-3 text-sm text-text-secondary">
+        Ubicación de origen:{' '}
+        <span className="font-medium text-text-primary">
+          {locationName ?? 'Sin ubicación específica'}
+        </span>
+      </p>
+
       <ul className="overflow-hidden rounded-xl border border-border-default">
         {lines.map((line, index) => {
-          const short = availability
-            ? (availability[line.product_id] ?? 0) <
+          const short = stockByLocation
+            ? availableAt(line.product_id) <
               (requiredByProduct.get(line.product_id) ?? line.quantity)
             : false;
 
@@ -135,11 +153,11 @@ export function CheckoutConfirmModal({
                 </p>
                 <p className="mt-0.5 text-xs text-text-tertiary">
                   {line.quantity} {line.unit_name} × {formatAmount(line.unit_price)}
-                  {availability && (
+                  {stockByLocation && (
                     <>
                       {' · '}Disponible:{' '}
                       <span className={short ? 'font-medium text-semantic-danger-700' : undefined}>
-                        {formatQuantity(availability[line.product_id] ?? 0)} u. base
+                        {formatQuantity(availableAt(line.product_id))} u. base
                       </span>
                     </>
                   )}

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useRepositories } from '@/application/providers/RepositoryProvider';
-import type { PosStockLevels } from '@/application/hooks/pos/pos.types';
+import type { PosStockByLocation, PosStockLevels } from '@/application/hooks/pos/pos.types';
 import type {
   Stock,
   StockProductOption,
@@ -67,24 +67,45 @@ export function useStock() {
   );
 
   /**
-   * Existencia del almacén de origen indexada por producto (RN-INV-003: una
-   * fila por producto + almacén). La cantidad está en unidades base.
+   * Existencia del almacén de origen por producto y ubicación. Cada fila de
+   * `inventory.stock` es un producto en un almacén y, si se detalla, en una
+   * ubicación concreta (piso, estante o zona).
    */
-  const fetchAvailableStock = useCallback(
-    async (warehouseId: string): Promise<PosStockLevels> => {
+  const fetchAvailableStockByLocation = useCallback(
+    async (warehouseId: string): Promise<PosStockByLocation> => {
       const { data } = await stockRepo.getAll({ warehouseId, isActive: true });
 
-      return data.reduce<PosStockLevels>((levels, stock) => {
+      return data.reduce<PosStockByLocation>((levels, stock) => {
         const quantity = Number(stock.quantity);
+        const locationId = stock.location_id ?? null;
+        const productLevels = (levels[stock.product_id] ??= []);
+        const existing = productLevels.find((level) => level.location_id === locationId);
 
-        // Las filas en cero no aportan ni se pueden vender.
-        if (!(quantity > 0)) return levels;
+        if (existing) existing.quantity += quantity;
+        else productLevels.push({ location_id: locationId, quantity });
 
-        levels[stock.product_id] = (levels[stock.product_id] ?? 0) + quantity;
         return levels;
       }, {});
     },
     [stockRepo],
+  );
+
+  /**
+   * Existencia total del almacén de origen indexada por producto. Se deriva del
+   * desglose por ubicación para que ambos datos salgan de la misma consulta.
+   */
+  const fetchAvailableStock = useCallback(
+    async (warehouseId: string): Promise<PosStockLevels> => {
+      const levels = await fetchAvailableStockByLocation(warehouseId);
+
+      return Object.fromEntries(
+        Object.entries(levels).map(([productId, productLevels]) => [
+          productId,
+          productLevels.reduce((sum, level) => sum + level.quantity, 0),
+        ]),
+      );
+    },
+    [fetchAvailableStockByLocation],
   );
 
   const createStock = useCallback(
@@ -137,6 +158,7 @@ export function useStock() {
     fetchStocks,
     fetchOverview,
     fetchAvailableStock,
+    fetchAvailableStockByLocation,
     createStock,
     updateStock,
     activateStock,

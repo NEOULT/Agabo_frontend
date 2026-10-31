@@ -9,6 +9,7 @@ import { Textarea } from '@/presentation/components/ui/Textarea';
 import { useInventory } from '@/application/hooks/useInventory';
 import { useMovementTypes } from '@/application/hooks/useMovementTypes';
 import { useWarehouses } from '@/application/hooks/useWarehouses';
+import { useLocations } from '@/application/hooks/useLocations';
 import { useProducts } from '@/application/hooks/useProducts';
 import { useBranchStore } from '@/application/stores/useBranchStore';
 import { toast } from '@/application/stores/useToastStore';
@@ -17,6 +18,8 @@ import type { CreateMovementDetailDTO } from '@/domain/models';
 interface LineState {
   key: string;
   productId: string;
+  originLocationId: string;
+  destinationLocationId: string;
   quantity: string;
 }
 
@@ -26,6 +29,8 @@ function newLine(): LineState {
   return {
     key: `line-${Date.now()}-${lineCounter}`,
     productId: '',
+    originLocationId: '',
+    destinationLocationId: '',
     quantity: '1',
   };
 }
@@ -39,14 +44,16 @@ const PURPOSE_LABEL: Record<string, string> = {
  * Registro de un movimiento de inventario (RF-INV-014).
  *
  * La dirección surge de los almacenes (RN-INV-007): solo destino es entrada,
- * solo origen es salida y ambos es transferencia. Cada línea lleva su producto
- * y su cantidad.
+ * solo origen es salida y ambos es transferencia. Cada línea lleva su producto,
+ * su cantidad y, opcionalmente, la ubicación de origen y/o destino dentro del
+ * almacén correspondiente (piso, estante o zona).
  */
 export function MovementFormPage() {
   const navigate = useNavigate();
   const { createMovement } = useInventory();
   const { movementTypes, fetchMovementTypes } = useMovementTypes();
   const { warehouses, fetchWarehouses } = useWarehouses();
+  const { locations, fetchLocations } = useLocations();
   const { products, fetchProducts } = useProducts();
   const activeBranch = useBranchStore((s) => s.activeBranch);
 
@@ -62,7 +69,8 @@ export function MovementFormPage() {
   React.useEffect(() => {
     fetchMovementTypes({ isActive: true });
     fetchProducts({ isActive: true });
-  }, [fetchMovementTypes, fetchProducts]);
+    fetchLocations({ isActive: true });
+  }, [fetchMovementTypes, fetchProducts, fetchLocations]);
 
   React.useEffect(() => {
     fetchWarehouses({ branchId: activeBranch?.id || undefined });
@@ -72,6 +80,14 @@ export function MovementFormPage() {
     () => warehouses.filter((w) => w.is_active),
     [warehouses],
   );
+
+  const activeLocations = React.useMemo(
+    () => locations.filter((location) => location.is_active),
+    [locations],
+  );
+
+  const locationsOfWarehouse = (warehouseId: string) =>
+    activeLocations.filter((location) => location.warehouse_id === warehouseId);
 
   const updateLine = (key: string, changes: Partial<LineState>) => {
     setLines((prev) => prev.map((line) => (line.key === key ? { ...line, ...changes } : line)));
@@ -102,6 +118,8 @@ export function MovementFormPage() {
       }
       details.push({
         product_id: line.productId,
+        origin_location_id: line.originLocationId || null,
+        destination_location_id: line.destinationLocationId || null,
         quantity,
       });
     });
@@ -120,7 +138,7 @@ export function MovementFormPage() {
         details,
       });
       toast.success('El movimiento fue registrado y las existencias se actualizaron.');
-      navigate('/inventory/movements');
+      navigate('/inventory');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo registrar el movimiento.');
     } finally {
@@ -135,7 +153,7 @@ export function MovementFormPage() {
         <Button
           variant="ghost"
           leftIcon={<ArrowLeft className="h-4 w-4" />}
-          onClick={() => navigate('/inventory/movements')}
+          onClick={() => navigate('/inventory')}
         >
           Volver
         </Button>
@@ -217,24 +235,63 @@ export function MovementFormPage() {
                 className="rounded-lg border border-border-subtle p-4 space-y-3 bg-surface-secondary/40"
               >
                 <div className="flex items-start gap-3">
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Select
-                      label="Producto"
-                      value={line.productId}
-                      onChange={(e) => updateLine(line.key, { productId: e.target.value })}
-                      options={products.map((p) => ({ value: p.id, label: p.name }))}
-                      placeholder="Selecciona un producto"
-                      required
-                    />
-                    <Input
-                      label="Cantidad"
-                      type="number"
-                      min={0}
-                      step="1"
-                      value={line.quantity}
-                      onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
-                      required
-                    />
+                  <div className="flex-1 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Select
+                        label="Producto"
+                        value={line.productId}
+                        onChange={(e) => updateLine(line.key, { productId: e.target.value })}
+                        options={products.map((p) => ({ value: p.id, label: p.name }))}
+                        placeholder="Selecciona un producto"
+                        required
+                      />
+                      <Input
+                        label="Cantidad"
+                        type="number"
+                        min={0}
+                        step="1"
+                        value={line.quantity}
+                        onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    {(originWarehouseId || destinationWarehouseId) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {originWarehouseId && (
+                          <Select
+                            label="Ubicación de origen"
+                            value={line.originLocationId}
+                            onChange={(e) =>
+                              updateLine(line.key, { originLocationId: e.target.value })
+                            }
+                            options={[
+                              { value: '', label: 'Sin ubicación específica' },
+                              ...locationsOfWarehouse(originWarehouseId).map((location) => ({
+                                value: location.id,
+                                label: `${location.code} · ${location.name}`,
+                              })),
+                            ]}
+                          />
+                        )}
+                        {destinationWarehouseId && (
+                          <Select
+                            label="Ubicación de destino"
+                            value={line.destinationLocationId}
+                            onChange={(e) =>
+                              updateLine(line.key, { destinationLocationId: e.target.value })
+                            }
+                            options={[
+                              { value: '', label: 'Sin ubicación específica' },
+                              ...locationsOfWarehouse(destinationWarehouseId).map((location) => ({
+                                value: location.id,
+                                label: `${location.code} · ${location.name}`,
+                              })),
+                            ]}
+                          />
+                        )}
+                      </div>
+                    )}
                   </div>
                   {lines.length > 1 && (
                     <button
@@ -258,7 +315,7 @@ export function MovementFormPage() {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => navigate('/inventory/movements')}
+              onClick={() => navigate('/inventory')}
               disabled={isSaving}
             >
               Cancelar

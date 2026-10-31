@@ -255,7 +255,7 @@ export function MovementsPage() {
           <Select
             value={warehouseId}
             onChange={(e) => setWarehouseId(e.target.value)}
-            className="h-9 !py-0 text-xs"
+            size="sm"
             options={[
               { value: '', label: 'Todos los almacenes' },
               ...warehouses.map((w) => ({ value: w.id, label: w.name })),
@@ -265,7 +265,7 @@ export function MovementsPage() {
           <Select
             value={movementTypeId}
             onChange={(e) => setMovementTypeId(e.target.value)}
-            className="h-9 !py-0 text-xs"
+            size="sm"
             options={[
               { value: '', label: 'Todos los tipos' },
               ...movementTypes.map((t) => ({ value: t.id, label: t.name })),
@@ -275,7 +275,8 @@ export function MovementsPage() {
           <Select
             value={productId}
             onChange={(e) => setProductId(e.target.value)}
-            className="h-9 !py-0 text-xs sm:w-52"
+            size="sm"
+            className="sm:w-52"
             options={[
               { value: '', label: 'Todos los productos' },
               ...products.map((p) => ({ value: p.id, label: p.name })),

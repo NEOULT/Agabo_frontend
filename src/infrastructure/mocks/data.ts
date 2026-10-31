@@ -6,6 +6,7 @@ import type { Brand } from '@/domain/models/brand';
 import type { Supplier } from '@/domain/models/supplier';
 import type { Branch } from '@/domain/models/branch';
 import type { Warehouse } from '@/domain/models/warehouse';
+import type { Location } from '@/domain/models/location';
 import type { User } from '@/domain/models/user';
 import type { PurchaseOrder } from '@/domain/models/purchase-order';
 import type { PurchaseReceipt } from '@/domain/models/purchase-receipt';
@@ -72,6 +73,40 @@ export const MOCK_WAREHOUSES: Warehouse[] = [
     is_active: true,
     created_at: '2024-03-05T08:00:00Z',
     updated_at: '2024-06-10T10:00:00Z',
+  },
+];
+
+// 📍 Ubicaciones dentro de los almacenes (company.location)
+export const MOCK_LOCATIONS: Location[] = [
+  {
+    id: 'location-001',
+    warehouse_id: 'warehouse-001',
+    code: 'EST-A1',
+    name: 'Estante A1',
+    type: 'almacenamiento',
+    is_active: true,
+    created_at: '2024-01-25T08:00:00Z',
+    updated_at: '2024-06-01T10:00:00Z',
+  },
+  {
+    id: 'location-002',
+    warehouse_id: 'warehouse-001',
+    code: 'REC-01',
+    name: 'Área de recepción',
+    type: 'recepción',
+    is_active: true,
+    created_at: '2024-01-25T08:00:00Z',
+    updated_at: '2024-06-01T10:00:00Z',
+  },
+  {
+    id: 'location-003',
+    warehouse_id: 'warehouse-002',
+    code: 'DES-01',
+    name: 'Área de despacho',
+    type: 'despacho',
+    is_active: false,
+    created_at: '2024-02-15T08:00:00Z',
+    updated_at: '2024-06-01T10:00:00Z',
   },
 ];
 

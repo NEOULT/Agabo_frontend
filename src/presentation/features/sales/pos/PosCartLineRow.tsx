@@ -53,7 +53,7 @@ export function PosCartLineRow({
             (available > 0 ? (
               <span
                 className="text-xs text-text-tertiary"
-                title={`${formatQuantity(available)} unidades base en el almacén de origen`}
+                title={`${formatQuantity(available)} unidades base en esta ubicación del almacén de origen`}
               >
                 Disponible: {formatQuantity(available)} {line.unit_name}
               </span>
@@ -63,8 +63,7 @@ export function PosCartLineRow({
           {line.is_hidden && (
             <span className="text-xs font-medium text-semantic-warning-700">No cuenta</span>
           )}
-        </div>
-      </div>
+        </div>      </div>
 
       {/* Cantidad */}
       <div className="flex items-center gap-1">

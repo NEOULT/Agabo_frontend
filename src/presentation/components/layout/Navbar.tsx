@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { LogOut, User, Building2, ChevronDown, KeyRound, Menu } from 'lucide-react';
+import { LogOut, User, Building2, KeyRound, Menu } from 'lucide-react';
+import { Select } from '@/presentation/components/ui/Select';
 import { useAuth } from '@/application/hooks/useAuth';
 import { useBranchStore } from '@/application/stores/useBranchStore';
 import { useUIStore } from '@/application/stores/useUIStore';
@@ -36,25 +37,20 @@ export function Navbar() {
         {branches.length > 1 && (
           <div className="flex items-center gap-2">
             <Building2 className="h-4 w-4 text-header-muted" />
-            <div className="relative">
-              <select
-                value={activeBranch?.id ?? ''}
-                onChange={(e) => {
-                  const branch = branches.find((b) => b.id === e.target.value);
-                  if (branch) setActiveBranch(branch);
-                }}
-                className="text-sm appearance-none bg-header-select text-header-text border border-header-border rounded-lg px-3 py-1.5 pr-8 focus:outline-none focus:ring-2 focus:ring-header-ring"
-              >
-                {branches
-                  .filter((b) => b.is_active)
-                  .map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
-                  ))}
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-header-muted pointer-events-none" />
-            </div>
+            <Select
+              value={activeBranch?.id ?? ''}
+              onChange={(e) => {
+                const branch = branches.find((b) => b.id === e.target.value);
+                if (branch) setActiveBranch(branch);
+              }}
+              variant="header"
+              size="sm"
+              className="min-w-36"
+              options={branches
+                .filter((b) => b.is_active)
+                .map((branch) => ({ value: branch.id, label: branch.name }))}
+              aria-label="Sucursal activa"
+            />
           </div>
         )}
 

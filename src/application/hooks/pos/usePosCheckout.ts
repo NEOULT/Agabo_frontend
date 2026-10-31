@@ -4,7 +4,7 @@ import { usePayments } from '@/application/hooks/usePayments';
 import { useSales } from '@/application/hooks/useSales';
 import { useStock } from '@/application/hooks/useStock';
 import { toast } from '@/application/stores/useToastStore';
-import type { CartLine, PosLastSale, PosStockLevels } from './pos.types';
+import type { CartLine, PosLastSale, PosStockByLocation, PosStockLevels } from './pos.types';
 import { toSaleDetails } from './pos.utils';
 
 interface UsePosCheckoutOptions {
@@ -15,6 +15,8 @@ interface UsePosCheckoutOptions {
   amount: number;
   branchId: string;
   warehouseId: string;
+  /** Ubicación del almacén de origen de la que se descuenta la venta. */
+  locationId: string | null;
   customerId: string;
   note: string;
   paymentMethodId: string;
@@ -43,6 +45,7 @@ export function usePosCheckout({
   amount,
   branchId,
   warehouseId,
+  locationId,
   customerId,
   note,
   paymentMethodId,
@@ -54,22 +57,28 @@ export function usePosCheckout({
 }: UsePosCheckoutOptions) {
   const { createSale } = useSales();
   const { createPayment } = usePayments();
-  const { fetchAvailableStock } = useStock();
+  const { fetchAvailableStockByLocation } = useStock();
 
   const [isSaving, setIsSaving] = useState(false);
   const [lastSale, setLastSale] = useState<PosLastSale | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  // Existencia del almacén de origen por producto. `null` = sin dato todavía
-  // (sin permiso de inventario o falla la consulta): no bloquea el cobro, el
-  // backend sigue validando la existencia al registrar la venta.
-  const [stockLevels, setStockLevels] = useState<PosStockLevels | null>(null);
+  // Existencia del almacén de origen por producto y ubicación. `null` = sin
+  // dato todavía (sin permiso de inventario o falla la consulta): no bloquea el
+  // cobro, el backend sigue validando la existencia al registrar la venta.
+  const [stockByLocation, setStockByLocation] = useState<PosStockByLocation | null>(null);
   const [isStockLoading, setIsStockLoading] = useState(false);
 
-  /** Cantidad disponible por producto, en unidades base. */
-  const availability = useMemo<Record<string, number> | null>(
-    () => stockLevels,
-    [stockLevels],
-  );
+  /** Cantidad total disponible por producto, en unidades base. */
+  const availability = useMemo<PosStockLevels | null>(() => {
+    if (!stockByLocation) return null;
+
+    return Object.fromEntries(
+      Object.entries(stockByLocation).map(([productId, levels]) => [
+        productId,
+        levels.reduce((sum, level) => sum + level.quantity, 0),
+      ]),
+    );
+  }, [stockByLocation]);
 
   const canConfirm =
     canSell &&
@@ -84,19 +93,19 @@ export function usePosCheckout({
   /** Trae la existencia del almacén de origen (POS, confirmación y cobro). */
   const loadAvailability = useCallback(async () => {
     if (!warehouseId) {
-      setStockLevels(null);
+      setStockByLocation(null);
       return;
     }
 
     setIsStockLoading(true);
     try {
-      setStockLevels(await fetchAvailableStock(warehouseId));
+      setStockByLocation(await fetchAvailableStockByLocation(warehouseId));
     } catch {
-      setStockLevels(null);
+      setStockByLocation(null);
     } finally {
       setIsStockLoading(false);
     }
-  }, [fetchAvailableStock, warehouseId]);
+  }, [fetchAvailableStockByLocation, warehouseId]);
 
   // Al cambiar de almacén se refresca la existencia: el POS muestra la cantidad
   // de cada producto antes de cobrar, no solo al abrir la confirmación.
@@ -146,7 +155,7 @@ export function usePosCheckout({
         warehouse_id: warehouseId,
         customer_id: customerId || undefined,
         note: note.trim() || undefined,
-        details: toSaleDetails(lines),
+        details: toSaleDetails(lines, locationId),
       });
 
       // 2) El pago en el mismo paso.
@@ -210,6 +219,7 @@ export function usePosCheckout({
     customerId,
     lines,
     loadAvailability,
+    locationId,
     note,
     onSaleCompleted,
     onSaleWithoutPayment,
@@ -232,6 +242,7 @@ export function usePosCheckout({
     lastSale,
     dismissLastSale,
     availability,
+    stockByLocation,
     isStockLoading,
     reloadAvailability: loadAvailability,
   };

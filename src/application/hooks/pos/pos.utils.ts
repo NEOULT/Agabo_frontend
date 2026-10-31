@@ -92,11 +92,16 @@ export function cartItemsCount(lines: CartLine[]): number {
 
 /**
  * Detalle que viaja al backend al registrar la venta (RN-SAL-009), en la
- * unidad base del producto.
+ * unidad base del producto. La ubicación es la del encabezado del cobro: todas
+ * las líneas salen de la misma ubicación del almacén de origen.
  */
-export function toSaleDetails(lines: CartLine[]): CreateSaleDetailDTO[] {
+export function toSaleDetails(
+  lines: CartLine[],
+  locationId: string | null,
+): CreateSaleDetailDTO[] {
   return lines.map((line) => ({
     product_id: line.product_id,
+    location_id: locationId,
     quantity: line.quantity,
     unit_price: line.unit_price,
   }));

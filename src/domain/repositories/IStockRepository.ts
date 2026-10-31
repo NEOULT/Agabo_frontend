@@ -10,6 +10,7 @@ import type { PaginationParams } from '@/shared/types/common';
 export interface StockQueryParams extends PaginationParams {
   productId?: string;
   warehouseId?: string;
+  locationId?: string;
   isActive?: boolean;
 }
 

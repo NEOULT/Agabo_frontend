@@ -63,6 +63,8 @@ const BranchListPage = page(() => import('@/presentation/features/company/branch
 const BranchFormPage = page(() => import('@/presentation/features/company/branches/BranchFormPage'), 'BranchFormPage');
 const WarehouseListPage = page(() => import('@/presentation/features/company/warehouses/WarehouseListPage'), 'WarehouseListPage');
 const WarehouseFormPage = page(() => import('@/presentation/features/company/warehouses/WarehouseFormPage'), 'WarehouseFormPage');
+const LocationListPage = page(() => import('@/presentation/features/company/locations/LocationListPage'), 'LocationListPage');
+const LocationFormPage = page(() => import('@/presentation/features/company/locations/LocationFormPage'), 'LocationFormPage');
 const CurrencyListPage = page(() => import('@/presentation/features/company/currencies/CurrencyListPage'), 'CurrencyListPage');
 
 // Inventario
@@ -254,6 +256,19 @@ export function AppRouter() {
             <Route path="/company/warehouses" element={<WarehouseListPage />} />
             <Route path="/company/warehouses/new" element={<WarehouseFormPage />} />
             <Route path="/company/warehouses/:id/edit" element={<WarehouseFormPage />} />
+          </Route>
+
+          <Route
+            element={
+              <PermissionGuard
+                permissions={['company.locations:read']}
+                fallbackRoles={['super_admin']}
+              />
+            }
+          >
+            <Route path="/company/locations" element={<LocationListPage />} />
+            <Route path="/company/locations/new" element={<LocationFormPage />} />
+            <Route path="/company/locations/:id/edit" element={<LocationFormPage />} />
           </Route>
 
           {/* Catálogo global de monedas (solo lectura) */}

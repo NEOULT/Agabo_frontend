@@ -18,6 +18,7 @@ import { Table, type TableColumn } from '@/presentation/components/ui/Table';
 import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog';
 import { EmptyState } from '@/presentation/components/shared/EmptyState';
 import { useStock } from '@/application/hooks/useStock';
+import { useLocations } from '@/application/hooks/useLocations';
 import { usePermissions } from '@/application/hooks/usePermissions';
 import { useBranchStore } from '@/application/stores/useBranchStore';
 import { toast } from '@/application/stores/useToastStore';
@@ -28,16 +29,24 @@ import { StockHistoryModal } from './StockHistoryModal';
 interface FormState {
   productId: string;
   warehouseId: string;
+  locationId: string;
   quantity: string;
 }
 
-const emptyForm: FormState = { productId: '', warehouseId: '', quantity: '0' };
+const emptyForm: FormState = {
+  productId: '',
+  warehouseId: '',
+  locationId: '',
+  quantity: '0',
+};
 
 /** Producto con su existencia total y el desglose por almacén. */
 interface ProductStockGroup {
   product_id: string;
   total: number;
   stocks: Stock[];
+  /** Almacenes distintos: varias filas pueden ser el mismo almacén con ubicaciones distintas. */
+  warehouseIds: string[];
   is_active: boolean;
   updated_at: string;
 }
@@ -66,6 +75,7 @@ export function StockPage() {
     activateStock,
     deactivateStock,
   } = useStock();
+  const { locations, fetchLocations } = useLocations();
   const activeBranch = useBranchStore((s) => s.activeBranch);
 
   const { can } = usePermissions();
@@ -118,6 +128,11 @@ export function StockPage() {
     });
   }, [activeBranch?.id, fetchOverview, warehouseId, productId, status]);
 
+  // Catalogo de ubicaciones para asignar existencias a un piso o estante.
+  React.useEffect(() => {
+    fetchLocations({ isActive: true });
+  }, [fetchLocations]);
+
   const productName = React.useMemo(() => {
     const map = new Map(products.map((product) => [product.id, product.name]));
     return (id: string) => map.get(id) ?? '—';
@@ -127,6 +142,16 @@ export function StockPage() {
     const map = new Map(warehouses.map((warehouse) => [warehouse.id, warehouse.name]));
     return (id: string) => map.get(id) ?? '—';
   }, [warehouses]);
+
+  const locationName = React.useMemo(() => {
+    const map = new Map(locations.map((location) => [location.id, location.name]));
+    return (id: string) => map.get(id) ?? '—';
+  }, [locations]);
+
+  const activeLocations = React.useMemo(
+    () => locations.filter((location) => location.is_active),
+    [locations],
+  );
 
   const activeProducts = React.useMemo(
     () => products.filter((product) => product.is_active),
@@ -149,6 +174,7 @@ export function StockPage() {
           product_id: stock.product_id,
           total: Number(stock.quantity),
           stocks: [stock],
+          warehouseIds: [stock.warehouse_id],
           is_active: stock.is_active,
           updated_at: stock.updated_at,
         });
@@ -157,6 +183,9 @@ export function StockPage() {
 
       current.total += Number(stock.quantity);
       current.stocks.push(stock);
+      if (!current.warehouseIds.includes(stock.warehouse_id)) {
+        current.warehouseIds.push(stock.warehouse_id);
+      }
       current.is_active = current.is_active || stock.is_active;
       if (stock.updated_at > current.updated_at) current.updated_at = stock.updated_at;
     }
@@ -187,6 +216,7 @@ export function StockPage() {
     setForm({
       productId: stock.product_id,
       warehouseId: stock.warehouse_id,
+      locationId: stock.location_id ?? '',
       quantity: String(stock.quantity),
     });
     setFormError(undefined);
@@ -215,6 +245,7 @@ export function StockPage() {
         await createStock({
           product_id: form.productId,
           warehouse_id: form.warehouseId,
+          location_id: form.locationId || null,
           quantity,
         });
         setExpandedProducts((prev) => new Set(prev).add(form.productId));
@@ -278,7 +309,17 @@ export function StockPage() {
       key: 'warehouses',
       header: 'Almacenes',
       align: 'center',
-      cell: (group) => <span className="text-text-secondary">{group.stocks.length}</span>,
+      cell: (group) => (
+        <div>
+          <span className="text-text-secondary">{group.warehouseIds.length}</span>
+          {/* Varias filas del mismo almacén son ubicaciones distintas, no almacenes. */}
+          {group.stocks.length > group.warehouseIds.length && (
+            <span className="block text-xs text-text-tertiary">
+              {group.stocks.length} ubicaciones
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: 'total',
@@ -315,11 +356,16 @@ export function StockPage() {
           variant="ghost"
           leftIcon={<HistoryIcon className="h-4 w-4" />}
           onClick={() => {
-            if (group.stocks.length === 1) setHistoryStock(group.stocks[0]);
-            else toggleExpanded(group.product_id);
+            if (group.warehouseIds.length === 1) {
+              // El historial es por producto + almacén: si hay varias ubicaciones,
+              // el saldo inicial es el total del almacén, no el de una ubicación.
+              setHistoryStock({ ...group.stocks[0], quantity: group.total });
+            } else {
+              toggleExpanded(group.product_id);
+            }
           }}
         >
-          {group.stocks.length === 1 ? 'Historial' : 'Almacenes'}
+          {group.warehouseIds.length === 1 ? 'Historial' : 'Detalle'}
         </Button>
       ),
     },
@@ -389,7 +435,7 @@ export function StockPage() {
           expandedRow={(group) => (
             <div className="space-y-2">
               <div className="grid grid-cols-12 gap-3 px-2 text-xs font-medium uppercase tracking-wider text-text-tertiary">
-                <div className="col-span-4">Almacén</div>
+                <div className="col-span-4">Almacén / Ubicación</div>
                 <div className="col-span-2 text-right">Cantidad</div>
                 <div className="col-span-2 text-center">Estado</div>
                 <div className="col-span-2">Actualizado</div>
@@ -407,6 +453,11 @@ export function StockPage() {
                   >
                     <div className="col-span-4 text-sm font-medium text-text-primary">
                       {warehouseName(stock.warehouse_id)}
+                      <span className="block text-xs font-normal text-text-tertiary">
+                        {stock.location_id
+                          ? `Ubicación: ${locationName(stock.location_id)}`
+                          : 'Sin ubicación específica'}
+                      </span>
                     </div>
                     <div className="col-span-2 text-right text-sm text-text-primary">
                       {formatQuantity(stock.quantity)}
@@ -422,7 +473,18 @@ export function StockPage() {
                     <div className="col-span-2 flex items-center justify-end gap-1">
                       <button
                         type="button"
-                        onClick={() => setHistoryStock(stock)}
+                        onClick={() =>
+                          setHistoryStock({
+                            ...stock,
+                            // El historial es por almacén: el saldo inicial suma
+                            // todas las ubicaciones de ese almacén.
+                            quantity: round4(
+                              group.stocks
+                                .filter((item) => item.warehouse_id === stock.warehouse_id)
+                                .reduce((sum, item) => sum + Number(item.quantity), 0),
+                            ),
+                          })
+                        }
                         className="rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-tertiary hover:text-brand-600"
                         title="Ver historial"
                       >
@@ -504,6 +566,15 @@ export function StockPage() {
             <>
               <Input label="Producto" value={productName(editing.product_id)} disabled />
               <Input label="Almacén" value={warehouseName(editing.warehouse_id)} disabled />
+              <Input
+                label="Ubicación"
+                value={
+                  editing.location_id
+                    ? locationName(editing.location_id)
+                    : 'Sin ubicación específica'
+                }
+                disabled
+              />
             </>
           ) : (
             <>
@@ -528,6 +599,27 @@ export function StockPage() {
                 }))}
                 placeholder="Selecciona un almacén"
                 required
+              />
+              <Select
+                label="Ubicación (opcional)"
+                value={form.locationId}
+                onChange={(e) => setForm((prev) => ({ ...prev, locationId: e.target.value }))}
+                options={activeLocations
+                  .filter(
+                    (location) =>
+                      !form.warehouseId || location.warehouse_id === form.warehouseId,
+                  )
+                  .map((location) => ({
+                    value: location.id,
+                    label: `${location.code} · ${location.name}`,
+                  }))}
+                placeholder={
+                  form.warehouseId
+                    ? 'Sin ubicación específica'
+                    : 'Selecciona primero el almacén'
+                }
+                disabled={!form.warehouseId}
+                helperText="Piso, estante o zona donde queda la mercancía dentro del almacén."
               />
               <p className="text-xs text-text-tertiary">
                 Si el producto ya tiene existencia en ese almacén, el backend rechaza el registro.

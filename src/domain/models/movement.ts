@@ -45,6 +45,10 @@ export interface MovementDetail {
   movement_id: string;
   product_id: string;
   lot_id?: string;
+  /** Ubicacion de origen dentro del almacen de origen (opcional). */
+  origin_location_id?: string;
+  /** Ubicacion de destino dentro del almacen de destino (opcional). */
+  destination_location_id?: string;
   quantity: number;
   created_at: string;
 }
@@ -72,6 +76,10 @@ export interface Movement {
 export interface CreateMovementDetailDTO {
   product_id: string;
   lot_id?: string | null;
+  /** Debe pertenecer al almacen de origen del movimiento. */
+  origin_location_id?: string | null;
+  /** Debe pertenecer al almacen de destino del movimiento. */
+  destination_location_id?: string | null;
   quantity: number;
 }
 

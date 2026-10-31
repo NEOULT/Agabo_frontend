@@ -67,6 +67,12 @@ export type {
   UpdateWarehouseDTO,
 } from './warehouse';
 
+export type {
+  Location,
+  CreateLocationDTO,
+  UpdateLocationDTO,
+} from './location';
+
 export type { Currency } from './currency';
 
 export type {

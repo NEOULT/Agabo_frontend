@@ -7,6 +7,8 @@ export { ApiBranchRepository } from './ApiBranchRepository';
 export { toBranch } from './branch.mapper';
 export { ApiWarehouseRepository } from './ApiWarehouseRepository';
 export { toWarehouse } from './warehouse.mapper';
+export { ApiLocationRepository } from './ApiLocationRepository';
+export { toLocation } from './location.mapper';
 export { ApiSupplierRepository } from './ApiSupplierRepository';
 export { toSupplier } from './supplier.mapper';
 export { ApiPriceListRepository } from './ApiPriceListRepository';

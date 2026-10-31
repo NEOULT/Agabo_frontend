@@ -29,6 +29,8 @@ export interface ParkedSale {
   note: string;
   branch_id: string;
   warehouse_id: string;
+  /** Ubicación del almacén de origen de la venta (vacío = sin ubicación). */
+  location_id?: string;
   payment_method_id: string;
   lines: ParkedSaleLine[];
 }
