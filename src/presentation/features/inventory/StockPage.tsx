@@ -7,12 +7,14 @@ import {
   Pencil,
   Plus,
   Power,
+  Search,
 } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/presentation/components/ui/Card';
 import { Badge } from '@/presentation/components/ui/Badge';
 import { Input } from '@/presentation/components/ui/Input';
 import { Select } from '@/presentation/components/ui/Select';
+import { SearchableSelect } from '@/presentation/components/ui/SearchableSelect';
 import { Modal } from '@/presentation/components/ui/Modal';
 import { Table, type TableColumn } from '@/presentation/components/ui/Table';
 import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog';
@@ -86,6 +88,7 @@ export function StockPage() {
   const [warehouseId, setWarehouseId] = React.useState('');
   const [productId, setProductId] = React.useState('');
   const [status, setStatus] = React.useState('true');
+  const [search, setSearch] = React.useState('');
 
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Stock | null>(null);
@@ -195,6 +198,24 @@ export function StockPage() {
       .sort((a, b) => productName(a.product_id).localeCompare(productName(b.product_id)));
   }, [productName, stocks]);
 
+  // Búsqueda local sobre lo ya cargado: producto, almacén o ubicación.
+  const filteredGroups = React.useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return groups;
+
+    return groups.filter(
+      (group) =>
+        productName(group.product_id).toLowerCase().includes(term) ||
+        group.stocks.some(
+          (stock) =>
+            warehouseName(stock.warehouse_id).toLowerCase().includes(term) ||
+            (stock.location_id
+              ? locationName(stock.location_id).toLowerCase().includes(term)
+              : false),
+        ),
+    );
+  }, [groups, locationName, productName, search, warehouseName]);
+
   const toggleExpanded = (value: string) => {
     setExpandedProducts((prev) => {
       const next = new Set(prev);
@@ -280,7 +301,7 @@ export function StockPage() {
     }
   };
 
-  const hasFilters = Boolean(warehouseId || productId);
+  const hasFilters = Boolean(warehouseId || productId || search.trim());
   const canSubmit = activeProducts.length > 0 && activeWarehouses.length > 0;
 
   const columns: TableColumn<ProductStockGroup>[] = [
@@ -394,17 +415,31 @@ export function StockPage() {
         </div>
       )}
 
-      <Card padding="none">
-        <div className="p-4 border-b border-border-subtle grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <Card padding="none" className="overflow-hidden">
+        {/* Búsqueda y filtros de la tabla. */}
+        <div className="grid grid-cols-1 gap-3 border-b border-border-subtle p-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar producto, almacén o ubicación"
+            leftIcon={<Search className="h-4 w-4" />}
+            aria-label="Buscar existencias"
+          />
+
           <Select
             value={warehouseId}
             onChange={(e) => setWarehouseId(e.target.value)}
             options={[
               { value: '', label: 'Todos los almacenes' },
-              ...warehouses.map((warehouse) => ({ value: warehouse.id, label: warehouse.name })),
+              ...warehouses.map((warehouse) => ({
+                value: warehouse.id,
+                label: warehouse.name,
+              })),
             ]}
             aria-label="Filtrar por almacén"
           />
+
           <Select
             value={productId}
             onChange={(e) => setProductId(e.target.value)}
@@ -414,6 +449,7 @@ export function StockPage() {
             ]}
             aria-label="Filtrar por producto"
           />
+
           <Select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
@@ -426,121 +462,127 @@ export function StockPage() {
           />
         </div>
 
-        <Table
-          columns={columns}
-          data={groups}
-          rowKey={(group) => group.product_id}
-          isLoading={isLoading}
-          isRowExpanded={(group) => expandedProducts.has(group.product_id)}
-          expandedRow={(group) => (
-            <div className="space-y-2">
-              <div className="grid grid-cols-12 gap-3 px-2 text-xs font-medium uppercase tracking-wider text-text-tertiary">
-                <div className="col-span-4">Almacén / Ubicación</div>
-                <div className="col-span-2 text-right">Cantidad</div>
-                <div className="col-span-2 text-center">Estado</div>
-                <div className="col-span-2">Actualizado</div>
-                <div className="col-span-2 text-right">Acciones</div>
-              </div>
-
-              {[...group.stocks]
-                .sort((a, b) =>
-                  warehouseName(a.warehouse_id).localeCompare(warehouseName(b.warehouse_id)),
-                )
-                .map((stock) => (
-                  <div
-                    key={stock.id}
-                    className="grid grid-cols-12 items-center gap-3 rounded-lg border border-border-subtle bg-surface-primary px-3 py-2"
-                  >
-                    <div className="col-span-4 text-sm font-medium text-text-primary">
-                      {warehouseName(stock.warehouse_id)}
-                      <span className="block text-xs font-normal text-text-tertiary">
-                        {stock.location_id
-                          ? `Ubicación: ${locationName(stock.location_id)}`
-                          : 'Sin ubicación específica'}
-                      </span>
-                    </div>
-                    <div className="col-span-2 text-right text-sm text-text-primary">
-                      {formatQuantity(stock.quantity)}
-                    </div>
-                    <div className="col-span-2 text-center">
-                      <Badge variant={stock.is_active ? 'success' : 'neutral'}>
-                        {stock.is_active ? 'Activa' : 'Inactiva'}
-                      </Badge>
-                    </div>
-                    <div className="col-span-2 text-xs text-text-tertiary">
-                      {formatDateShort(stock.updated_at)}
-                    </div>
-                    <div className="col-span-2 flex items-center justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setHistoryStock({
-                            ...stock,
-                            // El historial es por almacén: el saldo inicial suma
-                            // todas las ubicaciones de ese almacén.
-                            quantity: round4(
-                              group.stocks
-                                .filter((item) => item.warehouse_id === stock.warehouse_id)
-                                .reduce((sum, item) => sum + Number(item.quantity), 0),
-                            ),
-                          })
-                        }
-                        className="rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-tertiary hover:text-brand-600"
-                        title="Ver historial"
-                      >
-                        <HistoryIcon className="h-4 w-4" />
-                      </button>
-                      {canUpdate && (
-                        <button
-                          type="button"
-                          onClick={() => openEdit(stock)}
-                          className="rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-tertiary hover:text-brand-600"
-                          title="Ajustar existencia"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      )}
-                      {canSetActive && (
+        {/*
+          La tabla hace scroll dentro de la tarjeta: así no se desborda de la
+          pantalla ni estira la página por muchas filas que haya.
+        */}
+        <div className="max-h-[65vh] overflow-y-auto">
+          <Table
+            columns={columns}
+            data={filteredGroups}
+            rowKey={(group) => group.product_id}
+            isLoading={isLoading}
+            isRowExpanded={(group) => expandedProducts.has(group.product_id)}
+            expandedRow={(group) => (
+              <div className="space-y-2">
+                <div className="grid grid-cols-12 gap-3 px-2 text-xs font-medium uppercase tracking-wider text-text-tertiary">
+                  <div className="col-span-4">Almacén / Ubicación</div>
+                  <div className="col-span-2 text-right">Cantidad</div>
+                  <div className="col-span-2 text-center">Estado</div>
+                  <div className="col-span-2">Actualizado</div>
+                  <div className="col-span-2 text-right">Acciones</div>
+                </div>
+  
+                {[...group.stocks]
+                  .sort((a, b) =>
+                    warehouseName(a.warehouse_id).localeCompare(warehouseName(b.warehouse_id)),
+                  )
+                  .map((stock) => (
+                    <div
+                      key={stock.id}
+                      className="grid grid-cols-12 items-center gap-3 rounded-lg border border-border-subtle bg-surface-primary px-3 py-2"
+                    >
+                      <div className="col-span-4 text-sm font-medium text-text-primary">
+                        {warehouseName(stock.warehouse_id)}
+                        <span className="block text-xs font-normal text-text-tertiary">
+                          {stock.location_id
+                            ? `Ubicación: ${locationName(stock.location_id)}`
+                            : 'Sin ubicación específica'}
+                        </span>
+                      </div>
+                      <div className="col-span-2 text-right text-sm text-text-primary">
+                        {formatQuantity(stock.quantity)}
+                      </div>
+                      <div className="col-span-2 text-center">
+                        <Badge variant={stock.is_active ? 'success' : 'neutral'}>
+                          {stock.is_active ? 'Activa' : 'Inactiva'}
+                        </Badge>
+                      </div>
+                      <div className="col-span-2 text-xs text-text-tertiary">
+                        {formatDateShort(stock.updated_at)}
+                      </div>
+                      <div className="col-span-2 flex items-center justify-end gap-1">
                         <button
                           type="button"
                           onClick={() =>
-                            setPendingAction({
-                              type: stock.is_active ? 'deactivate' : 'activate',
-                              stock,
+                            setHistoryStock({
+                              ...stock,
+                              // El historial es por almacén: el saldo inicial suma
+                              // todas las ubicaciones de ese almacén.
+                              quantity: round4(
+                                group.stocks
+                                  .filter((item) => item.warehouse_id === stock.warehouse_id)
+                                  .reduce((sum, item) => sum + Number(item.quantity), 0),
+                              ),
                             })
                           }
-                          className={`rounded-lg p-2 transition-colors ${
-                            stock.is_active
-                              ? 'text-text-muted hover:bg-surface-tertiary hover:text-semantic-danger-600'
-                              : 'text-text-muted hover:bg-surface-tertiary hover:text-semantic-success-600'
-                          }`}
-                          title={stock.is_active ? 'Desactivar existencia' : 'Activar existencia'}
+                          className="rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-tertiary hover:text-brand-600"
+                          title="Ver historial"
                         >
-                          <Power className="h-4 w-4" />
+                          <HistoryIcon className="h-4 w-4" />
                         </button>
-                      )}
+                        {canUpdate && (
+                          <button
+                            type="button"
+                            onClick={() => openEdit(stock)}
+                            className="rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-tertiary hover:text-brand-600"
+                            title="Ajustar existencia"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canSetActive && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPendingAction({
+                                type: stock.is_active ? 'deactivate' : 'activate',
+                                stock,
+                              })
+                            }
+                            className={`rounded-lg p-2 transition-colors ${
+                              stock.is_active
+                                ? 'text-text-muted hover:bg-surface-tertiary hover:text-semantic-danger-600'
+                                : 'text-text-muted hover:bg-surface-tertiary hover:text-semantic-success-600'
+                            }`}
+                            title={stock.is_active ? 'Desactivar existencia' : 'Activar existencia'}
+                          >
+                            <Power className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-            </div>
-          )}
-          emptyState={
-            <EmptyState
-              icon={<Package className="h-12 w-12" />}
-              title={hasFilters ? 'Sin resultados' : 'No hay existencias'}
-              description={
-                hasFilters
-                  ? 'No se encontraron existencias con los filtros aplicados.'
-                  : 'Las existencias se crean al registrar movimientos o manualmente para ajustes.'
-              }
-              action={
-                !hasFilters && canCreate ? (
-                  <Button onClick={openCreate}>+ Registrar Existencia</Button>
-                ) : undefined
-              }
-            />
-          }
-        />
+                  ))}
+              </div>
+            )}
+            emptyState={
+              <EmptyState
+                icon={<Package className="h-12 w-12" />}
+                title={hasFilters ? 'Sin resultados' : 'No hay existencias'}
+                description={
+                  hasFilters
+                    ? 'No se encontraron existencias con los filtros aplicados.'
+                    : 'Las existencias se crean al registrar movimientos o manualmente para ajustes.'
+                }
+                action={
+                  !hasFilters && canCreate ? (
+                    <Button onClick={openCreate}>+ Registrar Existencia</Button>
+                  ) : undefined
+                }
+              />
+            }
+          />
+        </div>
       </Card>
 
       <Modal
@@ -578,15 +620,16 @@ export function StockPage() {
             </>
           ) : (
             <>
-              <Select
+              <SearchableSelect
                 label="Producto"
                 value={form.productId}
-                onChange={(e) => setForm((prev) => ({ ...prev, productId: e.target.value }))}
+                onChange={(value) => setForm((prev) => ({ ...prev, productId: value }))}
                 options={activeProducts.map((product) => ({
                   value: product.id,
                   label: product.name,
                 }))}
-                placeholder="Selecciona un producto"
+                placeholder="Buscar y seleccionar un producto"
+                emptyText="Ningún producto coincide con la búsqueda"
                 required
               />
               <Select
