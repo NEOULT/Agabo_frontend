@@ -20,6 +20,7 @@ import { Table, type TableColumn } from '@/presentation/components/ui/Table';
 import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog';
 import { EmptyState } from '@/presentation/components/shared/EmptyState';
 import { useStock } from '@/application/hooks/useStock';
+import { useProducts } from '@/application/hooks/useProducts';
 import { useLocations } from '@/application/hooks/useLocations';
 import { usePermissions } from '@/application/hooks/usePermissions';
 import { useBranchStore } from '@/application/stores/useBranchStore';
@@ -78,6 +79,8 @@ export function StockPage() {
     deactivateStock,
   } = useStock();
   const { locations, fetchLocations } = useLocations();
+  // El resumen de existencias no trae los códigos: se toman del catálogo.
+  const { products: catalogProducts, fetchProducts } = useProducts();
   const activeBranch = useBranchStore((s) => s.activeBranch);
 
   const { can } = usePermissions();
@@ -135,6 +138,11 @@ export function StockPage() {
   React.useEffect(() => {
     fetchLocations({ isActive: true });
   }, [fetchLocations]);
+
+  // Códigos (SKU / barras) por producto para poder buscar por ellos.
+  React.useEffect(() => {
+    void fetchProducts();
+  }, [fetchProducts]);
 
   const productName = React.useMemo(() => {
     const map = new Map(products.map((product) => [product.id, product.name]));
@@ -198,7 +206,18 @@ export function StockPage() {
       .sort((a, b) => productName(a.product_id).localeCompare(productName(b.product_id)));
   }, [productName, stocks]);
 
-  // Búsqueda local sobre lo ya cargado: producto, almacén o ubicación.
+  const productCodes = React.useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const product of catalogProducts) {
+      map.set(
+        product.id,
+        product.codes.map((code) => code.code.toLowerCase()),
+      );
+    }
+    return map;
+  }, [catalogProducts]);
+
+  // Búsqueda local sobre lo ya cargado: nombre, código, almacén o ubicación.
   const filteredGroups = React.useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return groups;
@@ -206,6 +225,7 @@ export function StockPage() {
     return groups.filter(
       (group) =>
         productName(group.product_id).toLowerCase().includes(term) ||
+        (productCodes.get(group.product_id) ?? []).some((code) => code.includes(term)) ||
         group.stocks.some(
           (stock) =>
             warehouseName(stock.warehouse_id).toLowerCase().includes(term) ||
@@ -214,7 +234,7 @@ export function StockPage() {
               : false),
         ),
     );
-  }, [groups, locationName, productName, search, warehouseName]);
+  }, [groups, locationName, productCodes, productName, search, warehouseName]);
 
   const toggleExpanded = (value: string) => {
     setExpandedProducts((prev) => {
@@ -422,7 +442,7 @@ export function StockPage() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar producto, almacén o ubicación"
+            placeholder="Buscar producto, código, almacén o ubicación"
             leftIcon={<Search className="h-4 w-4" />}
             aria-label="Buscar existencias"
           />
