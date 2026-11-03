@@ -1,10 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Package, Power, Eye } from 'lucide-react';
+import { Plus, Package, Power, Eye, ScanText } from 'lucide-react';
 import { Button } from '@/presentation/components/ui/Button';
 import { Card, CardHeader, CardTitle } from '@/presentation/components/ui/Card';
 import { Badge } from '@/presentation/components/ui/Badge';
 import { Table, type TableColumn } from '@/presentation/components/ui/Table';
+import { ColumnFilter, type ColumnFilterOption } from '@/presentation/components/ui/ColumnFilter';
 import { ConfirmDialog } from '@/presentation/components/ui/ConfirmDialog';
 import { SearchInput } from '@/presentation/components/shared/SearchInput';
 import { EmptyState } from '@/presentation/components/shared/EmptyState';
@@ -14,6 +15,7 @@ import { useBrands } from '@/application/hooks/useBrands';
 import { usePermissions } from '@/application/hooks/usePermissions';
 import { toast } from '@/application/stores/useToastStore';
 import type { Product } from '@/domain/models';
+import { BulkProductImportModal } from './BulkProductImportModal';
 
 /**
  * Catálogo de productos (catalog.product).
@@ -29,9 +31,20 @@ export function ProductListPage() {
   const { can } = usePermissions();
 
   const canCreate = can('catalog.products:create');
+  const canUpdate = can('catalog.products:update');
   const canSetActive = can('catalog.products:deactivate');
 
+  // La carga masiva crea el producto y su código SKU en el mismo paso.
+  const canBulkImport = canCreate && canUpdate;
+  const [isBulkOpen, setIsBulkOpen] = React.useState(false);
+
   const [search, setSearch] = React.useState('');
+  /** Filtros por columna (estilo hoja de cálculo); vacío = se acepta todo. */
+  const [columnFilters, setColumnFilters] = React.useState({
+    category: [] as string[],
+    brand: [] as string[],
+    status: [] as string[],
+  });
   const [pendingAction, setPendingAction] = React.useState<
     { type: 'activate' | 'deactivate'; product: Product } | null
   >(null);
@@ -49,6 +62,86 @@ export function ProductListPage() {
 
   const categoryName = (id?: string) => categories.find((c) => c.id === id)?.name;
   const brandName = (id?: string) => brands.find((b) => b.id === id)?.name;
+
+  const setFilter = (key: keyof typeof columnFilters) => (values: string[]) =>
+    setColumnFilters((prev) => ({ ...prev, [key]: values }));
+
+  const hasColumnFilters = Object.values(columnFilters).some((values) => values.length > 0);
+  const hasFilters = hasColumnFilters || Boolean(search);
+
+  /** Valores presentes en una columna, con su cantidad; `''` = sin valor. */
+  const categoryOptions = React.useMemo<ColumnFilterOption[]>(() => {
+    const counts = new Map<string, number>();
+    for (const product of products) {
+      const key = product.category_id ?? '';
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    const names = new Map(categories.map((category) => [category.id, category.name]));
+
+    return [...counts.entries()]
+      .map(([value, count]) => ({
+        value,
+        label: value ? names.get(value) ?? 'Categoría eliminada' : 'Sin categoría',
+        count,
+      }))
+      .sort((a, b) => Number(a.value === '') - Number(b.value === '') || a.label.localeCompare(b.label));
+  }, [categories, products]);
+
+  const brandOptions = React.useMemo<ColumnFilterOption[]>(() => {
+    const counts = new Map<string, number>();
+    for (const product of products) {
+      const key = product.brand_id ?? '';
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    const names = new Map(brands.map((brand) => [brand.id, brand.name]));
+
+    return [...counts.entries()]
+      .map(([value, count]) => ({
+        value,
+        label: value ? names.get(value) ?? 'Marca eliminada' : 'Sin marca',
+        count,
+      }))
+      .sort((a, b) => Number(a.value === '') - Number(b.value === '') || a.label.localeCompare(b.label));
+  }, [brands, products]);
+
+  const statusOptions = React.useMemo<ColumnFilterOption[]>(() => {
+    const active = products.filter((product) => product.is_active).length;
+    const inactive = products.length - active;
+
+    return [
+      { value: 'true', label: 'Activo', count: active },
+      { value: 'false', label: 'Inactivo', count: inactive },
+    ];
+  }, [products]);
+
+  /** El filtro de columnas se aplica sobre lo ya cargado. */
+  const visibleProducts = React.useMemo(
+    () =>
+      products.filter((product) => {
+        if (
+          columnFilters.category.length > 0 &&
+          !columnFilters.category.includes(product.category_id ?? '')
+        ) {
+          return false;
+        }
+        if (
+          columnFilters.brand.length > 0 &&
+          !columnFilters.brand.includes(product.brand_id ?? '')
+        ) {
+          return false;
+        }
+        if (
+          columnFilters.status.length > 0 &&
+          !columnFilters.status.includes(String(product.is_active))
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    [columnFilters, products],
+  );
 
   const handleConfirmAction = async () => {
     if (!pendingAction) return;
@@ -95,17 +188,41 @@ export function ProductListPage() {
     {
       key: 'category_id',
       header: 'Categoría',
+      headerExtra: (
+        <ColumnFilter
+          columnLabel="Categoría"
+          options={categoryOptions}
+          selected={columnFilters.category}
+          onChange={setFilter('category')}
+        />
+      ),
       cell: (p) => <span className="text-text-secondary">{categoryName(p.category_id) ?? '—'}</span>,
     },
     {
       key: 'brand_id',
       header: 'Marca',
+      headerExtra: (
+        <ColumnFilter
+          columnLabel="Marca"
+          options={brandOptions}
+          selected={columnFilters.brand}
+          onChange={setFilter('brand')}
+        />
+      ),
       cell: (p) => <span className="text-text-secondary">{brandName(p.brand_id) ?? '—'}</span>,
     },
     {
       key: 'is_active',
       header: 'Estado',
       align: 'center',
+      headerExtra: (
+        <ColumnFilter
+          columnLabel="Estado"
+          options={statusOptions}
+          selected={columnFilters.status}
+          onChange={setFilter('status')}
+        />
+      ),
       cell: (p) => (
         <Badge variant={p.is_active ? 'success' : 'neutral'}>{p.is_active ? 'Activo' : 'Inactivo'}</Badge>
       ),
@@ -145,11 +262,25 @@ export function ProductListPage() {
     <div>
       <CardHeader>
         <CardTitle>Productos</CardTitle>
-        {canCreate && (
-          <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => navigate('/catalog/products/new')}>
-            Nuevo Producto
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canBulkImport && (
+            <Button
+              variant="secondary"
+              leftIcon={<ScanText className="h-4 w-4" />}
+              onClick={() => setIsBulkOpen(true)}
+            >
+              Carga masiva
+            </Button>
+          )}
+          {canCreate && (
+            <Button
+              leftIcon={<Plus className="h-4 w-4" />}
+              onClick={() => navigate('/catalog/products/new')}
+            >
+              Nuevo Producto
+            </Button>
+          )}
+        </div>
       </CardHeader>
 
       {error && (
@@ -159,34 +290,71 @@ export function ProductListPage() {
       )}
 
       <Card padding="none">
-        <div className="p-4 border-b border-border-subtle max-w-md">
-          <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre o código..." />
+        <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle p-4">
+          <div className="w-full max-w-md">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Buscar por nombre o código..."
+            />
+          </div>
+
+          {hasColumnFilters && (
+            <div className="flex items-center gap-2 text-xs text-text-tertiary">
+              <span>
+                {visibleProducts.length} de {products.length}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setColumnFilters({ category: [], brand: [], status: [] })
+                }
+              >
+                Limpiar filtros
+              </Button>
+            </div>
+          )}
         </div>
 
-        <Table
-          columns={columns}
-          data={products}
-          rowKey={(p) => p.id}
-          isLoading={isLoading}
-          onRowClick={(p) => navigate(`/catalog/products/${p.id}`)}
-          emptyState={
-            <EmptyState
-              icon={<Package className="h-12 w-12" />}
-              title={search ? 'Sin resultados' : 'No hay productos'}
-              description={
-                search
-                  ? 'No se encontraron productos que coincidan con la búsqueda.'
-                  : 'Registra tu primer producto. Antes necesitas al menos una unidad de medida.'
-              }
-              action={
-                !search && canCreate ? (
-                  <Button onClick={() => navigate('/catalog/products/new')}>+ Nuevo Producto</Button>
-                ) : undefined
-              }
-            />
-          }
-        />
+        {/* La tabla hace scroll dentro de la tarjeta: no desborda la pantalla. */}
+        <div className="max-h-[65vh] overflow-y-auto">
+          <Table
+            columns={columns}
+            data={visibleProducts}
+            rowKey={(p) => p.id}
+            isLoading={isLoading}
+            onRowClick={(p) => navigate(`/catalog/products/${p.id}`)}
+            emptyState={
+              <EmptyState
+                icon={<Package className="h-12 w-12" />}
+                title={hasFilters ? 'Sin resultados' : 'No hay productos'}
+                description={
+                  hasFilters
+                    ? 'No se encontraron productos que coincidan con la búsqueda o los filtros de columna.'
+                    : 'Registra tu primer producto. Antes necesitas al menos una unidad de medida.'
+                }
+                action={
+                  !hasFilters && canCreate ? (
+                    <Button onClick={() => navigate('/catalog/products/new')}>
+                      + Nuevo Producto
+                    </Button>
+                  ) : undefined
+                }
+              />
+            }
+          />
+        </div>
       </Card>
+
+      <BulkProductImportModal
+        isOpen={isBulkOpen}
+        onClose={() => {
+          setIsBulkOpen(false);
+          // El lote agrega productos fuera de la página cargada: se refresca.
+          void fetchProducts({ search: search || undefined });
+        }}
+      />
 
       <ConfirmDialog
         isOpen={pendingAction !== null}

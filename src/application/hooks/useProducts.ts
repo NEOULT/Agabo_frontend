@@ -58,6 +58,35 @@ export function useProducts() {
     return product;
   }, [productRepo]);
 
+  /**
+   * Alta en lote (carga desde factura): crea el producto y le asigna su código
+   * SKU en una sola operación de pantalla.
+   *
+   * Si el producto se crea pero el código falla (por ejemplo, un SKU repetido),
+   * el producto queda registrado y el error se propaga para reportarlo por fila.
+   */
+  const createProductWithCode = useCallback(
+    async (data: CreateProductDTO, code: string) => {
+      const product = await productRepo.create(data);
+
+      try {
+        const created = await productRepo.createCode({
+          product_id: product.id,
+          code,
+          type: 'sku',
+          is_primary: true,
+        });
+        const complete = { ...product, codes: [...product.codes, created] };
+        setProducts((prev) => [...prev, complete]);
+        return complete;
+      } catch (error) {
+        setProducts((prev) => [...prev, product]);
+        throw error;
+      }
+    },
+    [productRepo],
+  );
+
   const updateProduct = useCallback(async (id: string, data: UpdateProductDTO) => {
     const product = await productRepo.update(id, data);
     setProducts((prev) => prev.map((p) => (p.id === id ? product : p)));
@@ -110,6 +139,7 @@ export function useProducts() {
     fetchProducts,
     getProduct,
     createProduct,
+    createProductWithCode,
     updateProduct,
     activateProduct,
     deactivateProduct,

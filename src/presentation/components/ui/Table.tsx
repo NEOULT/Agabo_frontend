@@ -5,6 +5,8 @@ export interface TableColumn<T> {
   /** Clave única de la columna (y campo por defecto de la fila). */
   key: string;
   header: string;
+  /** Contenido extra en el encabezado (por ejemplo, un filtro de columna). */
+  headerExtra?: React.ReactNode;
   /** Renderizado personalizado de la celda. Si se omite, muestra row[key]. */
   cell?: (row: T) => React.ReactNode;
   /** Alineación del contenido (por defecto izquierda). */
@@ -71,7 +73,18 @@ export function Table<T>({
                 key={column.key}
                 className={`px-4 py-3 text-xs font-medium text-text-tertiary uppercase tracking-wider ${alignStyles[column.align ?? 'left']} ${column.className ?? ''}`}
               >
-                {column.header}
+                <div
+                  className={`flex items-center gap-1 ${
+                    column.align === 'right'
+                      ? 'justify-end'
+                      : column.align === 'center'
+                        ? 'justify-center'
+                        : ''
+                  }`}
+                >
+                  <span>{column.header}</span>
+                  {column.headerExtra}
+                </div>
               </th>
             ))}
           </tr>

@@ -4,6 +4,7 @@ export { Card, CardHeader, CardTitle } from './Card';
 export { Badge } from './Badge';
 export { Modal } from './Modal';
 export { Select } from './Select';
+export { ColumnFilter, type ColumnFilterOption } from './ColumnFilter';
 export { SearchableSelect, type SearchableSelectOption } from './SearchableSelect';
 export { Switch } from './Switch';
 export { Textarea } from './Textarea';
