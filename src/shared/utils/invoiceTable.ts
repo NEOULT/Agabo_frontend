@@ -6,8 +6,8 @@
  * el orden de las columnas. Solo se usa la geometría del texto:
  *
  * 1. Todas las palabras se proyectan sobre el eje horizontal.
- * 2. Los espacios verticales que ninguna palabra ocupa (canales o *gutters*)
- *    separan una columna de otra.
+ * 2. Un canal (o *gutter*) es una franja vertical donde casi ninguna fila tiene
+ *    texto. Ese canal separa una columna de otra.
  * 3. Cada palabra se asigna a la columna donde empieza.
  *
  * El resultado es una matriz de texto; qué columna representa el código y cuál
@@ -36,11 +36,23 @@ export interface InvoiceTable {
 }
 
 /** Un canal debe ocupar al menos este % del ancho del texto de la página. */
-const MIN_GUTTER_RATIO = 0.008;
+const MIN_GUTTER_RATIO = 0.004;
 /** Y al menos estos píxeles, para fotos pequeñas. */
-const MIN_GUTTER_PX = 6;
+const MIN_GUTTER_PX = 4;
+/** Tope de columnas: más que esto suele ser texto partido, no una tabla. */
+const MAX_COLUMNS = 12;
+/** Fracción de filas que puede invadir un canal sin dejar de serlo. */
+const GUTTER_ROW_TOLERANCE = 0.1;
 /** Tope de filas para no bloquear la interfaz con documentos enormes. */
 export const MAX_INVOICE_ROWS = 500;
+
+/** Encabezados y pies que no son productos y conviene descartar solos. */
+const HEADER_CODE_PATTERN = /^(c[oó]digo|c[oó]d\.?|sku|referencia|ref\.?|art[ií]culo|item)\b/i;
+const HEADER_NAME_PATTERN = /(descripci[oó]n|producto|nombre|detalle|concepto)/i;
+const TOTALS_PATTERN =
+  /^(total|subtotal|iva|impuesto|descuento|recargo|flete|env[ií]o|base(\s+imponible)?|efectivo|cambio|saldo|redondeo|propina)\b/i;
+const META_PATTERN =
+  /^(factura|fecha|cliente|nit|c[eé]dula|tel[eé]fono|direcci[oó]n|vendedor|cajero|forma\s+de\s+pago|remisi[oó]n)\b/i;
 
 /**
  * Construye la tabla de la factura. Las líneas se ordenan por altura y las
@@ -77,6 +89,10 @@ export function buildInvoiceTable(lines: OcrLineBox[]): InvoiceTable {
     const filled = trimmed.filter((cell) => cell.length > 0).length;
     if (filled === 0) continue;
 
+    // Encabezados, totales y datos del documento no son productos: si entran,
+    // se crean como filas basura que hay que desmarcar a mano.
+    if (isNonProductRow(trimmed, filled)) continue;
+
     // Continuación de la descripción de la fila anterior: misma columna y
     // separación vertical corta respecto a la línea previa.
     if (filled === 1 && previous && rows[previous.rowIndex]) {
@@ -96,8 +112,7 @@ export function buildInvoiceTable(lines: OcrLineBox[]): InvoiceTable {
       }
     }
 
-    // Encabezados sueltos, totales y pies de página quedan fuera de la tabla:
-    // una fila de producto siempre toca al menos dos columnas.
+    // Una fila de producto siempre toca al menos dos columnas.
     if (filled < 2) continue;
 
     rows.push(trimmed);
@@ -113,38 +128,221 @@ export function buildInvoiceTable(lines: OcrLineBox[]): InvoiceTable {
   return { columnCount, rows };
 }
 
-/** Posición (x) donde arranca cada columna detectada. */
-function detectColumnStarts(lines: OcrLineBox[]): number[] {
-  const intervals = lines
-    .flatMap((line) => line.words.map((word) => ({ x0: word.x0, x1: word.x1 })))
-    .sort((a, b) => a.x0 - b.x0);
+/** Descarta la fila si es encabezado de tabla, total o dato del documento. */
+function isNonProductRow(cells: string[], filled: number): boolean {
+  const texts = cells.filter((cell) => cell.length > 0);
 
-  const pageLeft = intervals[0].x0;
-  const pageRight = intervals.reduce((max, word) => Math.max(max, word.x1), intervals[0].x1);
-  const minGutter = Math.max(MIN_GUTTER_PX, (pageRight - pageLeft) * MIN_GUTTER_RATIO);
-  const threshold = gutterThreshold(lines, (pageRight - pageLeft) * MIN_GUTTER_RATIO);
+  const isHeader =
+    texts.some((text) => HEADER_CODE_PATTERN.test(text)) &&
+    texts.some((text) => HEADER_NAME_PATTERN.test(text));
+  if (isHeader) return true;
 
-  const starts: number[] = [pageLeft];
-  let coveredUntil = intervals[0].x1;
+  const first = texts[0] ?? '';
 
-  for (const word of intervals.slice(1)) {
-    const gap = word.x0 - coveredUntil;
-    if (gap > minGutter && gap > threshold) starts.push(coveredUntil);
-    coveredUntil = Math.max(coveredUntil, word.x1);
-  }
+  // «Total 1200» o «IVA 19%»: importes del pie, no productos.
+  if (filled <= 3 && TOTALS_PATTERN.test(first)) return true;
 
-  return starts;
+  // «Fecha 12/10/2026», «Cliente ...»: cabecera del documento.
+  if (filled <= 2 && META_PATTERN.test(first)) return true;
+
+  return false;
 }
 
 /**
- * Distancia mínima para considerar que un hueco separa columnas.
+ * Posición (x) donde arranca cada columna detectada.
  *
- * Se mide en función del ancho medio de los caracteres: un espacio entre
- * palabras ocupa una fracción de carácter, mientras que el canal entre dos
- * columnas ocupa varios. Así el umbral se adapta a la resolución, al tamaño de
- * letra y al tipo de documento sin depender de píxeles fijos.
+ * Se proyectan las palabras de todas las filas sobre el eje horizontal y se
+ * buscan franjas donde casi ninguna fila tiene texto. A diferencia de recorrer
+ * las palabras en orden, una sola palabra larga no puede tapar un canal: no
+ * borra el canal, solo suma una fila de cobertura, y se tolera hasta un 10 % de
+ * las filas. El corte se coloca al **final** del canal, donde arranca la
+ * columna siguiente: un nombre largo que se estira hacia la derecha no se
+ * reparte entre dos columnas.
  */
-function gutterThreshold(lines: OcrLineBox[], minGutter: number): number {
+function detectColumnStarts(lines: OcrLineBox[]): number[] {
+  const words = lines.flatMap((line, row) =>
+    line.words.map((word) => ({ x0: word.x0, x1: word.x1, row })),
+  );
+
+  if (words.length === 0) return [];
+
+  const pageLeft = words.reduce((min, word) => Math.min(min, word.x0), words[0].x0);
+  const pageRight = words.reduce((max, word) => Math.max(max, word.x1), words[0].x1);
+  const rowCount = lines.length;
+  const charWidth = medianCharWidth(lines);
+
+  // Con una sola fila no hay alineación vertical que detectar.
+  if (rowCount < 2 || pageRight - pageLeft < charWidth * 4) return [pageLeft];
+
+  const minGutter = Math.max(
+    MIN_GUTTER_PX,
+    charWidth * 1.2,
+    (pageRight - pageLeft) * MIN_GUTTER_RATIO,
+  );
+
+  // Se mide en franjas de un cuarto de carácter: suficiente resolución para no
+  // perder canales estrechos, sin recorrer la imagen píxel a píxel.
+  const binSize = Math.max(1, Math.round(charWidth / 4));
+  const binCount = Math.max(1, Math.ceil((pageRight - pageLeft) / binSize));
+  const binAt = (x: number) =>
+    Math.min(binCount - 1, Math.max(0, Math.floor((x - pageLeft) / binSize)));
+
+  // Filas distintas que tienen tinta en cada franja.
+  const rowCoverage = new Int32Array(binCount);
+  const rowBins = new Uint8Array(binCount);
+
+  for (const line of lines) {
+    rowBins.fill(0);
+    for (const word of line.words) {
+      const from = binAt(word.x0);
+      const to = binAt(word.x1);
+      for (let bin = from; bin <= to; bin += 1) rowBins[bin] = 1;
+    }
+    for (let bin = 0; bin < binCount; bin += 1) {
+      if (rowBins[bin]) rowCoverage[bin] += 1;
+    }
+  }
+
+  const allowedRows = Math.max(1, Math.floor(rowCount * GUTTER_ROW_TOLERANCE));
+  const minSideRows = Math.min(rowCount, Math.max(2, Math.ceil(rowCount * 0.1)));
+  // Una columna de un solo dígito es legítima: el lateral solo debe ser algo
+  // más ancho que la mitad de un carácter.
+  const minSideWidth = Math.max(6, charWidth / 2);
+
+  const boundaries: number[] = [];
+  const pending: Array<{ left: number; right: number }> = [
+    { left: pageLeft, right: pageRight },
+  ];
+
+  while (pending.length > 0 && boundaries.length < MAX_COLUMNS - 1) {
+    const region = pending.shift();
+    if (!region) break;
+
+    const fromBin = binAt(region.left);
+    const toBin = binAt(region.right);
+    const gutters: Array<{ start: number; end: number; cut: number; width: number }> = [];
+    let runStart = -1;
+
+    for (let bin = fromBin; bin <= toBin + 1; bin += 1) {
+      const isGutter = bin <= toBin && rowCoverage[bin] <= allowedRows;
+
+      if (isGutter && runStart < 0) runStart = bin;
+
+      if (!isGutter && runStart >= 0) {
+        const width = (bin - runStart) * binSize;
+        // Un canal pegado al borde de la región es el que ya separó al padre.
+        if (width >= minGutter && runStart > fromBin && bin - 1 < toBin) {
+          gutters.push({
+            start: runStart,
+            end: bin,
+            cut: cutInsideGutter(rowCoverage, runStart, bin, binSize, minGutter),
+            width,
+          });
+        }
+        runStart = -1;
+      }
+    }
+
+    // El canal más ancho separa los grupos de columnas más evidentes.
+    gutters.sort((a, b) => b.width - a.width);
+
+    for (const gutter of gutters) {
+      const boundary = refineBoundary(
+        pageLeft + gutter.cut * binSize,
+        words,
+        region,
+        binSize * 2,
+      );
+
+      if (boundary - region.left < minSideWidth || region.right - boundary < minSideWidth) {
+        continue;
+      }
+
+      // A cada lado del corte debe haber texto de varias filas: así un espacio
+      // ancho dentro de una descripción no inventa una columna.
+      const leftRows = new Set<number>();
+      const rightRows = new Set<number>();
+
+      for (const word of words) {
+        if (word.x0 < region.left || word.x0 > region.right) continue;
+        if (word.x0 < boundary) leftRows.add(word.row);
+        else rightRows.add(word.row);
+      }
+
+      if (leftRows.size < minSideRows || rightRows.size < minSideRows) continue;
+
+      boundaries.push(boundary);
+      pending.push(
+        { left: region.left, right: boundary },
+        { left: boundary, right: region.right },
+      );
+      break;
+    }
+  }
+
+  boundaries.sort((a, b) => a - b);
+  return [pageLeft, ...boundaries];
+}
+
+/**
+ * Ajusta el corte al inicio de la primera palabra de la columna siguiente.
+ *
+ * El corte sale de franjas de píxeles, así que puede quedar unos píxeles a la
+ * derecha del texto real y mandar la primera palabra a la columna anterior. Se
+ * mueve solo hacia la izquierda y como mucho una franja o dos.
+ */
+function refineBoundary(
+  boundary: number,
+  words: Array<{ x0: number }>,
+  region: { left: number; right: number },
+  tolerance: number,
+): number {
+  let firstStart = Number.POSITIVE_INFINITY;
+
+  for (const word of words) {
+    if (word.x0 < region.left || word.x0 > region.right) continue;
+    if (word.x0 >= boundary - tolerance && word.x0 < firstStart) firstStart = word.x0;
+  }
+
+  return Number.isFinite(firstStart) && firstStart < boundary ? firstStart : boundary;
+}
+
+/**
+ * Punto de corte dentro de un canal.
+ *
+ * Un canal puede tener algo de tinta de una sola fila (un nombre largo que se
+ * estira). El corte se pone en el final del último hueco **vacío** del canal:
+ * así queda justo donde arranca la columna siguiente, sin partir la palabra
+ * larga anterior ni dejar fuera el número más ancho de la columna siguiente.
+ */
+function cutInsideGutter(
+  rowCoverage: Int32Array,
+  start: number,
+  end: number,
+  binSize: number,
+  minGutter: number,
+): number {
+  let emptyStart = -1;
+  let cut = end;
+
+  for (let bin = start; bin < end; bin += 1) {
+    const isEmpty = rowCoverage[bin] === 0;
+
+    if (isEmpty && emptyStart < 0) emptyStart = bin;
+
+    if (!isEmpty && emptyStart >= 0) {
+      if ((bin - emptyStart) * binSize >= minGutter) cut = bin;
+      emptyStart = -1;
+    }
+  }
+
+  if (emptyStart >= 0 && (end - emptyStart) * binSize >= minGutter) cut = end;
+
+  return cut;
+}
+
+/** Ancho mediano de un carácter: base de todos los umbrales en píxeles. */
+function medianCharWidth(lines: OcrLineBox[]): number {
   const charWidths: number[] = [];
 
   for (const line of lines) {
@@ -155,11 +353,9 @@ function gutterThreshold(lines: OcrLineBox[], minGutter: number): number {
     }
   }
 
-  if (charWidths.length === 0) return minGutter;
+  if (charWidths.length === 0) return 10;
   charWidths.sort((a, b) => a - b);
-
-  const median = charWidths[Math.floor(charWidths.length / 2)];
-  return Math.max(minGutter, median * 2);
+  return Math.max(1, charWidths[Math.floor(charWidths.length / 2)]);
 }
 
 /** Última columna cuyo inicio no supera la posición de la palabra. */

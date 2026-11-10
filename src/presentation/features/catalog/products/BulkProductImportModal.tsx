@@ -71,6 +71,7 @@ function pickBaseUnit(units: Unit[]): Unit | null {
 }
 
 function ocrStatusLabel(status: string): string {
+  if (status === 'preprocessing') return 'Preparando la imagen…';
   if (status.includes('recogniz')) return 'Leyendo la factura…';
   if (status.includes('load') || status.includes('initializ')) return 'Preparando el lector…';
   return 'Procesando la imagen…';
@@ -268,12 +269,8 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
     setDraftRows((prev) => [...prev, { index: -manualRowCounter.current, code: '', name: '' }]);
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const picked = event.target.files?.[0];
-    // Permite volver a elegir el mismo archivo.
-    event.target.value = '';
-    if (!picked) return;
-
+  /** Lee una imagen (elegida en el selector o pegada) y la pasa por el OCR. */
+  const readImage = React.useCallback(async (picked: File) => {
     if (!picked.type.startsWith('image/')) {
       setOcrError('Selecciona una imagen (foto o captura de la factura).');
       return;
@@ -285,7 +282,7 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
     setFile(picked);
     setImageUrl(URL.createObjectURL(picked));
     setOcrError(null);
-    setOcrProgress({ status: 'starting', progress: 0 });
+    setOcrProgress({ status: 'preprocessing', progress: 0 });
     setIsReading(true);
 
     try {
@@ -318,6 +315,40 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
         setOcrProgress(null);
       }
     }
+  }, []);
+
+  // Pegar una captura o una foto desde el portapapeles arranca el mismo OCR.
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePaste = (event: ClipboardEvent) => {
+      // Solo en el paso de la foto: en revisión, un pegado no debe borrar el trabajo.
+      if (step !== 'source' && step !== 'upload') return;
+      if (isReading || isImporting) return;
+
+      const imageItem = Array.from(event.clipboardData?.items ?? []).find(
+        (item) => item.kind === 'file' && item.type.startsWith('image/'),
+      );
+      const pasted = imageItem?.getAsFile();
+      if (!pasted) return;
+
+      event.preventDefault();
+      setStep('upload');
+      void readImage(pasted);
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [isImporting, isOpen, isReading, readImage, step]);
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = event.target.files?.[0];
+    // Permite volver a elegir el mismo archivo.
+    event.target.value = '';
+    if (!picked) return;
+
+    setStep('upload');
+    await readImage(picked);
   };
 
   /** Carga un `.txt` / `.csv` en el área de texto para revisarlo antes de analizar. */
@@ -570,7 +601,8 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
             </span>
             <span className="text-sm font-semibold text-text-primary">Foto de la factura</span>
             <span className="text-xs text-text-tertiary">
-              Se extrae el texto de la imagen con OCR, aquí mismo en el equipo.
+              Se extrae el texto de la imagen con OCR, aquí mismo en el equipo. También puedes
+              pegarla con Ctrl+V.
             </span>
           </button>
 
@@ -668,6 +700,9 @@ B456\tTuerca 5/16\t20`}
             </span>
             <span className="text-xs text-text-tertiary">
               La imagen se procesa en este equipo; no se envía a ningún servidor.
+            </span>
+            <span className="text-xs text-text-tertiary">
+              También puedes pegarla con Ctrl+V (⌘+V en Mac).
             </span>
           </button>
 
