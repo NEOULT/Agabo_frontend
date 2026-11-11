@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, ChevronDown, Search } from 'lucide-react';
+import { Check, ChevronDown, Plus, Search } from 'lucide-react';
 
 export interface SearchableSelectOption {
   value: string;
@@ -22,6 +22,16 @@ interface SearchableSelectProps {
   required?: boolean;
   disabled?: boolean;
   id?: string;
+  /**
+   * Permite crear una opción desde el buscador cuando no aparece. Recibe el
+   * texto escrito; la pantalla que lo usa decide qué hacer (crear al vuelo o
+   * abrir un formulario) y luego selecciona la opción nueva.
+   */
+  onCreate?: (query: string) => void;
+  /** Texto del botón de alta; `{query}` se reemplaza por lo escrito. */
+  createLabel?: string;
+  /** Deshabilita el botón de alta (por ejemplo, mientras se guarda). */
+  isCreating?: boolean;
 }
 
 /**
@@ -44,6 +54,9 @@ export function SearchableSelect({
   required = false,
   disabled = false,
   id,
+  onCreate,
+  createLabel = 'Crear «{query}»',
+  isCreating = false,
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
@@ -191,7 +204,9 @@ export function SearchableSelect({
             className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-border-default bg-surface-primary py-1 shadow-elevated"
           >
             {filtered.length === 0 && (
-              <li className="px-3 py-2 text-sm text-text-tertiary">{emptyText}</li>
+              <li className="px-3 py-2 text-sm text-text-tertiary">
+                {onCreate && query.trim() ? 'Sin coincidencias. Puedes crearla:' : emptyText}
+              </li>
             )}
 
             {filtered.map((option, index) => {
@@ -229,6 +244,25 @@ export function SearchableSelect({
                 </li>
               );
             })}
+
+            {onCreate && query.trim() && (
+              <li className="border-t border-border-subtle">
+                <button
+                  type="button"
+                  disabled={isCreating}
+                  onClick={() => {
+                    const value = query.trim();
+                    setIsOpen(false);
+                    setQuery('');
+                    onCreate(value);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-brand-600 transition-colors hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Plus className="h-4 w-4 flex-shrink-0" />
+                  {createLabel.replace('{query}', query.trim())}
+                </button>
+              </li>
+            )}
           </ul>
         </div>
       )}

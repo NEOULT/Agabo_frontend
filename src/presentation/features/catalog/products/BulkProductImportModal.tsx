@@ -5,6 +5,7 @@ import {
   ClipboardPaste,
   FileText,
   ImageIcon,
+  MapPin,
   Plus,
   RotateCcw,
   TriangleAlert,
@@ -12,19 +13,41 @@ import {
 
 import { Modal } from '@/presentation/components/ui/Modal';
 import { Button } from '@/presentation/components/ui/Button';
+import { Input } from '@/presentation/components/ui/Input';
 import { Select } from '@/presentation/components/ui/Select';
+import { SearchableSelect } from '@/presentation/components/ui/SearchableSelect';
 import { Textarea } from '@/presentation/components/ui/Textarea';
 import { Badge } from '@/presentation/components/ui/Badge';
 import { Table, type TableColumn } from '@/presentation/components/ui/Table';
 import { useProducts } from '@/application/hooks/useProducts';
 import { useUnits } from '@/application/hooks/useUnits';
+import { useBrands } from '@/application/hooks/useBrands';
+import { useCategories } from '@/application/hooks/useCategories';
+import { useSuppliers } from '@/application/hooks/useSuppliers';
+import { useLocations } from '@/application/hooks/useLocations';
+import { useWarehouses } from '@/application/hooks/useWarehouses';
+import { usePriceLists } from '@/application/hooks/usePriceLists';
+import { useProductLoader } from '@/application/hooks/useProductLoader';
+import { useBranchStore } from '@/application/stores/useBranchStore';
+import { toast } from '@/application/stores/useToastStore';
 import { recognizeInvoiceImage, type OcrProgress } from '@/infrastructure/ocr/invoiceOcr';
 import {
   buildInvoiceTable,
   buildTableFromText,
+  cleanBarcode,
   columnSamples,
+  detectColumnRoles,
+  detectInvoiceMeta,
+  parseInvoiceNumber,
+  type ColumnRole as InvoiceColumnRole,
   type InvoiceTable,
 } from '@/shared/utils/invoiceTable';
+import {
+  brandPrefix,
+  buildProductName,
+  nextSku,
+  PRODUCT_NAME_MAX_LENGTH,
+} from '@/shared/utils/productLoad';
 import type { Unit } from '@/domain/models';
 
 interface BulkProductImportModalProps {
@@ -34,18 +57,37 @@ interface BulkProductImportModalProps {
 
 type Step = 'source' | 'upload' | 'text' | 'columns' | 'review' | 'result';
 
-type ColumnRole = 'ignore' | 'code' | 'name';
+type ColumnRole = 'ignore' | InvoiceColumnRole;
 
 interface ImportedRow {
   /** Índice de la fila en la tabla detectada. */
   index: number;
+  /** Código con el que el proveedor identifica el producto. */
   code: string;
+  /** Nombre propio, sin marca, categoría ni cantidad. */
   name: string;
+  /** SKU generado (marca + serial) para esta fila. */
+  sku: string;
+  /** Marca de la fila; si está vacía se usa la marca del lote. */
+  brandId: string;
+  quantity: string;
+  price: string;
+  barcode: string;
 }
 
 interface ImportFailure {
   label: string;
   message: string;
+}
+
+/** Código sugerido para una ubicación nueva a partir de su nombre. */
+function suggestLocationCode(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toUpperCase()
+    .slice(0, 6);
 }
 
 /** Nombres habituales de la unidad que se usa siempre en la carga masiva. */
@@ -82,23 +124,30 @@ function ocrStatusLabel(status: string): string {
  *
  * 1. **Origen** — foto de la factura, o texto pegado / archivo `.txt` / `.csv`.
  * 2. **Columnas** — se detectan (por la geometría del OCR o por el separador
- *    del texto) y aquí se decide qué columna es el código (SKU) y cuál el
- *    nombre; el resto se descarta.
- * 3. **Revisión** — se eligen las filas y se confirma el alta.
- * 4. **Resultado** — resumen de lo creado y de los errores por fila.
+ *    del texto) y se propone qué columna es cada cosa: código del proveedor,
+ *    nombre, cantidad, precio unitario y código de barras. La propuesta sale
+ *    del encabezado y, si no lo hay, del contenido; se puede corregir.
+ * 3. **Revisión** — se completan los datos de la factura (marca, categoría,
+ *    proveedor, ubicación, precio, nº de factura y nº de picking), se ajustan
+ *    cantidad, código de barras y SKU por fila, y se confirma el alta.
+ * 4. **Resultado** — resumen de lo creado, los avisos y los errores por fila.
  *
- * El OCR corre en el navegador: la foto no se sube a ningún servidor. La unidad
- * base siempre es "Unidad": marca y categoría se completan después, como en el
- * alta individual.
+ * El OCR corre en el navegador: la foto no se sube a ningún servidor. El SKU se
+ * genera con la marca y un serial ascendente; el nombre final se compone con
+ * marca, categoría, nombre, código del proveedor y cantidad, igual que en el
+ * alta individual. La unidad base del lote es "Unidad".
  */
 export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportModalProps) {
-  const {
-    createProductWithCode,
-    products: catalogProducts,
-    error: catalogError,
-    fetchProducts,
-  } = useProducts();
+  const { products: catalogProducts, error: catalogError, fetchProducts } = useProducts();
   const { units, fetchUnits } = useUnits();
+  const { brands, fetchBrands, createBrand } = useBrands();
+  const { categories, fetchCategories, createCategory } = useCategories();
+  const { suppliers, fetchSuppliers, createSupplier } = useSuppliers();
+  const { locations, fetchLocations, createLocation } = useLocations();
+  const { warehouses, fetchWarehouses } = useWarehouses();
+  const { priceLists, fetchPriceLists } = usePriceLists();
+  const { loadProduct } = useProductLoader();
+  const activeBranch = useBranchStore((s) => s.activeBranch);
 
   const [step, setStep] = React.useState<Step>('source');
 
@@ -114,6 +163,9 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
 
   const [codeColumn, setCodeColumn] = React.useState<number | ''>('');
   const [nameColumn, setNameColumn] = React.useState<number | ''>('');
+  const [barcodeColumn, setBarcodeColumn] = React.useState<number | ''>('');
+  const [quantityColumn, setQuantityColumn] = React.useState<number | ''>('');
+  const [priceColumn, setPriceColumn] = React.useState<number | ''>('');
 
   /** Filas de la revisión: ya editadas por la persona. */
   const [draftRows, setDraftRows] = React.useState<ImportedRow[]>([]);
@@ -122,9 +174,33 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
   const [isCheckingCodes, setIsCheckingCodes] = React.useState(false);
   const [isImporting, setIsImporting] = React.useState(false);
   const [importProgress, setImportProgress] = React.useState({ done: 0, total: 0 });
-  const [result, setResult] = React.useState<{ created: number; failures: ImportFailure[] } | null>(
-    null,
-  );
+  const [result, setResult] = React.useState<{
+    created: number;
+    failures: ImportFailure[];
+    warnings: string[];
+  } | null>(null);
+
+  // Datos que comparten todas las filas del lote (los de la factura).
+  const [batchBrandId, setBatchBrandId] = React.useState('');
+  const [batchCategoryId, setBatchCategoryId] = React.useState('');
+  const [batchSupplierId, setBatchSupplierId] = React.useState('');
+  const [batchWarehouseId, setBatchWarehouseId] = React.useState('');
+  const [batchLocationId, setBatchLocationId] = React.useState('');
+  const [batchInvoice, setBatchInvoice] = React.useState('');
+  const [batchPicking, setBatchPicking] = React.useState('');
+  const [batchPriceListId, setBatchPriceListId] = React.useState('');
+  const [batchErrors, setBatchErrors] = React.useState<Record<string, string | undefined>>({});
+
+  const [isCreatingBrand, setIsCreatingBrand] = React.useState(false);
+  const [isCreatingCategory, setIsCreatingCategory] = React.useState(false);
+  const [isCreatingSupplier, setIsCreatingSupplier] = React.useState(false);
+  const [locationDraft, setLocationDraft] = React.useState<{
+    name: string;
+    code: string;
+    warehouse_id: string;
+  } | null>(null);
+  const [locationError, setLocationError] = React.useState<string | null>(null);
+  const [isSavingLocation, setIsSavingLocation] = React.useState(false);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const textFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -133,14 +209,64 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
   /** Consecutivo de las filas agregadas a mano en la revisión. */
   const manualRowCounter = React.useRef(0);
 
-  // Catálogo de apoyo: sirve para avisar de códigos que ya existen.
+  // Catálogos de apoyo: sirven para completar cada fila y avisar de códigos
+  // que ya existen en el catálogo.
   React.useEffect(() => {
     if (!isOpen) return;
 
     void fetchUnits({ isActive: true });
+    void fetchBrands({ isActive: true });
+    void fetchCategories({ isActive: true });
+    void fetchSuppliers({ isActive: true });
+    void fetchLocations({ isActive: true });
     setIsCheckingCodes(true);
     void fetchProducts().finally(() => setIsCheckingCodes(false));
-  }, [isOpen, fetchUnits, fetchProducts]);
+  }, [
+    isOpen,
+    fetchUnits,
+    fetchBrands,
+    fetchCategories,
+    fetchSuppliers,
+    fetchLocations,
+    fetchProducts,
+  ]);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    void fetchWarehouses({ branchId: activeBranch?.id || undefined });
+    void fetchPriceLists({ branchId: activeBranch?.id || undefined, isActive: true });
+  }, [isOpen, activeBranch?.id, fetchWarehouses, fetchPriceLists]);
+
+  const activeWarehouses = React.useMemo(
+    () => warehouses.filter((warehouse) => warehouse.is_active),
+    [warehouses],
+  );
+
+  const activeLocations = React.useMemo(
+    () => locations.filter((location) => location.is_active),
+    [locations],
+  );
+
+  // Almacén y lista de precios por defecto del lote.
+  React.useEffect(() => {
+    if (!batchWarehouseId && activeWarehouses.length > 0) {
+      setBatchWarehouseId(activeWarehouses[0].id);
+    }
+  }, [activeWarehouses, batchWarehouseId]);
+
+  React.useEffect(() => {
+    if (!batchPriceListId && priceLists.length > 0) {
+      setBatchPriceListId(priceLists[0].id);
+    }
+  }, [priceLists, batchPriceListId]);
+
+  const brandNameOf = React.useCallback(
+    (brandId: string) => brands.find((brand) => brand.id === brandId)?.name,
+    [brands],
+  );
+
+  const batchCategoryName = categories.find((category) => category.id === batchCategoryId)?.name;
+  const batchSupplierName = suppliers.find((supplier) => supplier.id === batchSupplierId)?.name;
 
   // Libera la vista previa al reemplazar la imagen o cerrar el modal.
   React.useEffect(() => {
@@ -162,11 +288,22 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
     setTable(null);
     setCodeColumn('');
     setNameColumn('');
+    setBarcodeColumn('');
+    setQuantityColumn('');
+    setPriceColumn('');
     setDraftRows([]);
     setExcluded(new Set());
     setIsImporting(false);
     setImportProgress({ done: 0, total: 0 });
     setResult(null);
+    setBatchBrandId('');
+    setBatchCategoryId('');
+    setBatchSupplierId('');
+    setBatchLocationId('');
+    setBatchInvoice('');
+    setBatchPicking('');
+    setBatchErrors({});
+    setLocationDraft(null);
   }, []);
 
   const handleClose = () => {
@@ -181,15 +318,38 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
   const mappedRows = React.useMemo<ImportedRow[]>(() => {
     if (!table || codeColumn === '' || nameColumn === '') return [];
 
+    const cell = (row: string[], column: number | '') =>
+      column === '' ? '' : (row[column] ?? '').trim();
+
     return table.rows.reduce<ImportedRow[]>((rows, row, index) => {
-      const code = (row[codeColumn] ?? '').trim();
-      const name = (row[nameColumn] ?? '').trim();
+      const code = cell(row, codeColumn);
+      const name = cell(row, nameColumn);
       if (!code || !name) return rows;
 
-      rows.push({ index, code, name });
+      const quantity = parseInvoiceNumber(cell(row, quantityColumn));
+      const price = parseInvoiceNumber(cell(row, priceColumn));
+
+      rows.push({
+        index,
+        code,
+        name,
+        sku: '',
+        brandId: batchBrandId,
+        quantity: quantity === null ? '' : String(quantity),
+        price: price === null ? '' : String(price),
+        barcode: cleanBarcode(cell(row, barcodeColumn)),
+      });
       return rows;
     }, []);
-  }, [codeColumn, nameColumn, table]);
+  }, [
+    barcodeColumn,
+    batchBrandId,
+    codeColumn,
+    nameColumn,
+    priceColumn,
+    quantityColumn,
+    table,
+  ]);
 
   /** Códigos que ya existen en el catálogo (en minúsculas). */
   const existingCodes = React.useMemo(() => {
@@ -200,9 +360,40 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
     return codes;
   }, [catalogProducts]);
 
+  /** Códigos ya usados, para calcular el serial de cada SKU. */
+  const catalogCodeList = React.useMemo(
+    () => catalogProducts.flatMap((product) => product.codes.map((code) => code.code)),
+    [catalogProducts],
+  );
+
   /**
-   * Problemas por fila: código vacío, ya existente en el catálogo o repetido
-   * dentro del mismo lote. Las filas con problemas no se envían al backend.
+   * Reasigna los SKU del lote en orden: el serial más alto del catálogo (y de
+   * las filas anteriores) más uno. Se recalcula cuando cambia una marca.
+   */
+  const assignSkus = React.useCallback(
+    (
+      rows: ImportedRow[],
+      existing: string[],
+      /** Permite resolver el nombre de una marca recién creada (aún sin estado). */
+      resolveBrandName?: (brandId: string) => string | undefined,
+    ): ImportedRow[] => {
+      const taken = [...existing];
+      const resolve = resolveBrandName ?? brandNameOf;
+
+      return rows.map((row) => {
+        const prefix = brandPrefix(resolve(row.brandId));
+        const sku = nextSku(prefix, taken);
+        taken.push(sku);
+        return { ...row, sku };
+      });
+    },
+    [brandNameOf],
+  );
+
+  /**
+   * Problemas por fila: datos incompletos, código del proveedor repetido en el
+   * lote, cantidades o precios inválidos, nombre demasiado largo o SKU ya
+   * existente. Las filas con problemas no se envían al backend.
    */
   const rowIssues = React.useMemo(() => {
     const times = new Map<string, number>();
@@ -222,28 +413,67 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
         issues.set(row.index, 'Completa el código y el nombre.');
         continue;
       }
-      if (existingCodes.has(key)) {
-        issues.set(row.index, 'Ese código ya existe en el catálogo.');
+      if ((times.get(key) ?? 0) > 1) {
+        issues.set(row.index, 'Código del proveedor repetido en esta carga.');
         continue;
       }
-      if ((times.get(key) ?? 0) > 1) {
-        issues.set(row.index, 'Código repetido en esta carga.');
+
+      const quantity = Number(row.quantity.replace(',', '.'));
+      if (!Number.isFinite(quantity) || quantity < 0) {
+        issues.set(row.index, 'La cantidad debe ser un número mayor o igual a cero.');
+        continue;
+      }
+
+      if (row.price.trim()) {
+        const price = Number(row.price.replace(',', '.'));
+        if (!Number.isFinite(price) || price < 0) {
+          issues.set(row.index, 'El precio debe ser un número mayor o igual a cero.');
+          continue;
+        }
+      }
+
+      const composed = buildProductName({
+        brand: brandNameOf(row.brandId),
+        category: batchCategoryName,
+        name,
+        supplierCode: code,
+        quantity,
+      });
+      if (composed.length > PRODUCT_NAME_MAX_LENGTH) {
+        issues.set(row.index, `El nombre compuesto supera ${PRODUCT_NAME_MAX_LENGTH} caracteres.`);
+        continue;
+      }
+
+      if (!row.sku.trim()) {
+        issues.set(row.index, 'El SKU está vacío.');
+        continue;
+      }
+      if (existingCodes.has(row.sku.trim().toLowerCase())) {
+        issues.set(row.index, 'El SKU generado ya existe en el catálogo.');
       }
     }
 
     return issues;
-  }, [draftRows, existingCodes]);
+  }, [batchBrandId, batchCategoryName, brandNameOf, draftRows, existingCodes]);
 
   const rowsToImport = React.useMemo(
     () =>
       draftRows
         .filter((row) => !rowIssues.has(row.index) && !excluded.has(row.index))
-        .map((row) => ({ ...row, code: row.code.trim(), name: row.name.trim() })),
+        .map((row) => ({
+          ...row,
+          code: row.code.trim(),
+          name: row.name.trim(),
+          sku: row.sku.trim(),
+          barcode: row.barcode.trim(),
+          quantityNum: Number(row.quantity.replace(',', '.')),
+          priceNum: row.price.trim() ? Number(row.price.replace(',', '.')) : undefined,
+        })),
     [draftRows, excluded, rowIssues],
   );
 
   const goToReview = () => {
-    setDraftRows(mappedRows);
+    setDraftRows(assignSkus(mappedRows, catalogCodeList));
     setExcluded(new Set());
     setStep('review');
   };
@@ -257,17 +487,77 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
     });
   };
 
-  const updateRow = (index: number, field: 'code' | 'name', value: string) => {
+  const updateRow = (index: number, changes: Partial<ImportedRow>) => {
     setDraftRows((prev) =>
-      prev.map((row) => (row.index === index ? { ...row, [field]: value } : row)),
+      prev.map((row) => (row.index === index ? { ...row, ...changes } : row)),
+    );
+  };
+
+  /** Cambiar la marca de una fila regenera los SKU de todo el lote. */
+  const changeRowBrand = (index: number, brandId: string) => {
+    setDraftRows((prev) =>
+      assignSkus(
+        prev.map((row) => (row.index === index ? { ...row, brandId } : row)),
+        catalogCodeList,
+      ),
+    );
+  };
+
+  /** La marca del lote se aplica a todas las filas y refresca los SKU. */
+  const changeBatchBrand = (brandId: string, brandNameOverride?: string) => {
+    setBatchBrandId(brandId);
+    setDraftRows((prev) =>
+      assignSkus(
+        prev.map((row) => ({ ...row, brandId })),
+        catalogCodeList,
+        brandNameOverride
+          ? (id) => (id === brandId ? brandNameOverride : brandNameOf(id))
+          : undefined,
+      ),
     );
   };
 
   /** Agrega una fila vacía al final; su índice negativo no choca con las detectadas. */
   const addRow = () => {
     manualRowCounter.current += 1;
-    setDraftRows((prev) => [...prev, { index: -manualRowCounter.current, code: '', name: '' }]);
+
+    setDraftRows((prev) => {
+      const taken = [...catalogCodeList, ...prev.map((row) => row.sku).filter(Boolean)];
+      const sku = nextSku(brandPrefix(brandNameOf(batchBrandId)), taken);
+
+      return [
+        ...prev,
+        {
+          index: -manualRowCounter.current,
+          code: '',
+          name: '',
+          sku,
+          brandId: batchBrandId,
+          quantity: '',
+          price: '',
+          barcode: '',
+        },
+      ];
+    });
   };
+
+  /**
+   * Carga la tabla detectada y propone los papeles de cada columna. El número
+   * de factura solo se rellena si el documento lo trae rotulado.
+   */
+  const applyDetectedTable = React.useCallback((detected: InvoiceTable) => {
+    const roles = detectColumnRoles(detected);
+
+    setTable(detected);
+    setCodeColumn(roles.code ?? '');
+    setNameColumn(roles.name ?? '');
+    setBarcodeColumn(roles.barcode ?? '');
+    setQuantityColumn(roles.quantity ?? '');
+    setPriceColumn(roles.price ?? '');
+
+    const invoice = detectInvoiceMeta(detected.rawText).invoiceNumber;
+    if (invoice) setBatchInvoice((prev) => prev || invoice);
+  }, []);
 
   /** Lee una imagen (elegida en el selector o pegada) y la pasa por el OCR. */
   const readImage = React.useCallback(async (picked: File) => {
@@ -298,9 +588,7 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
         return;
       }
 
-      setTable(detected);
-      setCodeColumn('');
-      setNameColumn('');
+      applyDetectedTable(detected);
       setStep('columns');
     } catch (error) {
       if (ocrRequestRef.current !== requestId) return;
@@ -378,48 +666,80 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
     }
 
     setTextError(null);
-    setTable(detected);
-    setCodeColumn('');
-    setNameColumn('');
+    applyDetectedTable(detected);
     setStep('columns');
   };
 
   const setColumnRole = (index: number, role: ColumnRole) => {
-    if (role === 'code') {
-      setCodeColumn(index);
-      if (nameColumn === index) setNameColumn('');
-      return;
-    }
-
-    if (role === 'name') {
-      setNameColumn(index);
-      if (codeColumn === index) setCodeColumn('');
-      return;
-    }
-
+    // Cada columna tiene un solo papel: al cambiarlo se libera el anterior.
     if (codeColumn === index) setCodeColumn('');
     if (nameColumn === index) setNameColumn('');
+    if (barcodeColumn === index) setBarcodeColumn('');
+    if (quantityColumn === index) setQuantityColumn('');
+    if (priceColumn === index) setPriceColumn('');
+
+    if (role === 'code') setCodeColumn(index);
+    else if (role === 'name') setNameColumn(index);
+    else if (role === 'barcode') setBarcodeColumn(index);
+    else if (role === 'quantity') setQuantityColumn(index);
+    else if (role === 'price') setPriceColumn(index);
   };
 
   const columnRole = (index: number): ColumnRole => {
     if (codeColumn === index) return 'code';
     if (nameColumn === index) return 'name';
+    if (barcodeColumn === index) return 'barcode';
+    if (quantityColumn === index) return 'quantity';
+    if (priceColumn === index) return 'price';
     return 'ignore';
   };
 
   const handleImport = async () => {
     if (!baseUnit || rowsToImport.length === 0) return;
 
+    const errors: Record<string, string> = {};
+    if (rowsToImport.some((row) => row.quantityNum > 0) && !batchWarehouseId) {
+      errors.warehouse = 'Selecciona el almacén donde entra la mercancía.';
+    }
+    if (rowsToImport.some((row) => (row.priceNum ?? 0) > 0) && !batchPriceListId) {
+      errors.priceList = 'Selecciona la lista de precios o quita el precio unitario.';
+    }
+    setBatchErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
     setIsImporting(true);
     setImportProgress({ done: 0, total: rowsToImport.length });
 
     let created = 0;
     const failures: ImportFailure[] = [];
+    const warnings: string[] = [];
 
     for (const row of rowsToImport) {
       try {
-        await createProductWithCode({ name: row.name, base_unit_id: baseUnit.id }, row.code);
+        const { warnings: rowWarnings } = await loadProduct({
+          name: row.name,
+          brand: brandNameOf(row.brandId),
+          brand_id: row.brandId || undefined,
+          category: batchCategoryName,
+          category_id: batchCategoryId || undefined,
+          supplierCode: row.code,
+          quantity: row.quantityNum > 0 ? row.quantityNum : undefined,
+          base_unit_id: baseUnit.id,
+          sku: row.sku,
+          barcode: row.barcode || undefined,
+          supplierName: batchSupplierName,
+          invoiceNumber: batchInvoice.trim() || undefined,
+          pickingNumber: batchPicking.trim() || undefined,
+          unitPrice: row.priceNum && row.priceNum > 0 ? row.priceNum : undefined,
+          price_list_id: batchPriceListId || undefined,
+          warehouse_id: batchWarehouseId || undefined,
+          location_id: batchLocationId || undefined,
+          stock: row.quantityNum,
+        });
         created += 1;
+        for (const warning of rowWarnings) {
+          warnings.push(`${row.sku} · ${row.name}: ${warning}`);
+        }
       } catch (error) {
         failures.push({
           label: `${row.code} · ${row.name}`,
@@ -430,9 +750,88 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
       setImportProgress((prev) => ({ ...prev, done: prev.done + 1 }));
     }
 
-    setResult({ created, failures });
+    setResult({ created, failures, warnings });
     setIsImporting(false);
     setStep('result');
+  };
+
+  const handleCreateBrand = async (name: string) => {
+    setIsCreatingBrand(true);
+    try {
+      const brand = await createBrand({ name });
+      changeBatchBrand(brand.id, brand.name);
+      toast.success(`La marca "${brand.name}" fue creada.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo crear la marca.');
+    } finally {
+      setIsCreatingBrand(false);
+    }
+  };
+
+  const handleCreateCategory = async (name: string) => {
+    setIsCreatingCategory(true);
+    try {
+      const category = await createCategory({ name });
+      setBatchCategoryId(category.id);
+      toast.success(`La categoría "${category.name}" fue creada.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo crear la categoría.');
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  };
+
+  const handleCreateSupplier = async (name: string) => {
+    setIsCreatingSupplier(true);
+    try {
+      const supplier = await createSupplier({ name });
+      setBatchSupplierId(supplier.id);
+      toast.success(`El proveedor "${supplier.name}" fue creado.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo crear el proveedor.');
+    } finally {
+      setIsCreatingSupplier(false);
+    }
+  };
+
+  const openLocationDraft = (name: string) => {
+    setLocationDraft({
+      name,
+      code: suggestLocationCode(name),
+      warehouse_id: batchWarehouseId || activeWarehouses[0]?.id || '',
+    });
+    setLocationError(null);
+  };
+
+  const handleCreateLocation = async (e?: React.SyntheticEvent) => {
+    e?.preventDefault();
+    if (!locationDraft) return;
+
+    if (!locationDraft.warehouse_id) {
+      setLocationError('Selecciona el almacén de la ubicación.');
+      return;
+    }
+    if (!locationDraft.code.trim() || !locationDraft.name.trim()) {
+      setLocationError('Completa el código y el nombre de la ubicación.');
+      return;
+    }
+
+    setIsSavingLocation(true);
+    try {
+      const location = await createLocation({
+        warehouse_id: locationDraft.warehouse_id,
+        code: locationDraft.code.trim(),
+        name: locationDraft.name.trim(),
+      });
+      setBatchWarehouseId(location.warehouse_id);
+      setBatchLocationId(location.id);
+      toast.success(`La ubicación "${location.name}" fue creada.`);
+      setLocationDraft(null);
+    } catch (error) {
+      setLocationError(error instanceof Error ? error.message : 'No se pudo crear la ubicación.');
+    } finally {
+      setIsSavingLocation(false);
+    }
   };
 
   const reviewColumns: TableColumn<ImportedRow>[] = [
@@ -457,19 +856,32 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
       },
     },
     {
+      key: 'sku',
+      header: 'SKU',
+      cell: (row) => (
+        <input
+          value={row.sku}
+          onChange={(event) => updateRow(row.index, { sku: event.target.value })}
+          onClick={(event) => event.stopPropagation()}
+          aria-label={`SKU de la fila ${row.index}`}
+          className="w-24 rounded-md border border-border-input bg-surface-primary px-2 py-1 font-mono text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+      ),
+    },
+    {
       key: 'code',
-      header: 'Código (SKU)',
+      header: 'Cód. proveedor',
       cell: (row) => {
         const issue = rowIssues.get(row.index);
         const position = draftRows.findIndex((item) => item.index === row.index) + 1;
 
         return (
-          <div className="min-w-40">
+          <div className="min-w-28">
             <input
               value={row.code}
-              onChange={(event) => updateRow(row.index, 'code', event.target.value)}
+              onChange={(event) => updateRow(row.index, { code: event.target.value })}
               onClick={(event) => event.stopPropagation()}
-              aria-label={`Código de la fila ${position}`}
+              aria-label={`Código del proveedor de la fila ${position}`}
               className={`w-full rounded-md border bg-surface-primary px-2 py-1 font-mono text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500 ${
                 issue ? 'border-semantic-danger-300' : 'border-border-input'
               }`}
@@ -482,13 +894,93 @@ export function BulkProductImportModal({ isOpen, onClose }: BulkProductImportMod
     {
       key: 'name',
       header: 'Nombre',
+      cell: (row) => {
+        const composed = buildProductName({
+          brand: brandNameOf(row.brandId),
+          category: batchCategoryName,
+          name: row.name,
+          supplierCode: row.code,
+          quantity: Number(row.quantity.replace(',', '.')) || undefined,
+        });
+
+        return (
+          <div className="min-w-56">
+            <input
+              value={row.name}
+              onChange={(event) => updateRow(row.index, { name: event.target.value })}
+              onClick={(event) => event.stopPropagation()}
+              aria-label={`Nombre de la fila ${draftRows.findIndex((item) => item.index === row.index) + 1}`}
+              className="w-full rounded-md border border-border-input bg-surface-primary px-2 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <p className="mt-1 truncate text-xs text-text-tertiary" title={composed}>
+              {composed || '—'}
+            </p>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'brandId',
+      header: 'Marca',
+      cell: (row) => (
+        <div onClick={(event) => event.stopPropagation()} className="min-w-32">
+          <Select
+            size="sm"
+            value={row.brandId}
+            onChange={(event) => changeRowBrand(row.index, event.target.value)}
+            options={[
+              { value: '', label: 'Sin marca' },
+              ...brands.map((brand) => ({ value: brand.id, label: brand.name })),
+            ]}
+            aria-label={`Marca de la fila ${row.index}`}
+          />
+        </div>
+      ),
+    },
+    {
+      key: 'quantity',
+      header: 'Cant.',
       cell: (row) => (
         <input
-          value={row.name}
-          onChange={(event) => updateRow(row.index, 'name', event.target.value)}
+          type="number"
+          min={0}
+          step="1"
+          value={row.quantity}
+          onChange={(event) => updateRow(row.index, { quantity: event.target.value })}
           onClick={(event) => event.stopPropagation()}
-          aria-label={`Nombre de la fila ${draftRows.findIndex((item) => item.index === row.index) + 1}`}
-          className="w-full min-w-56 rounded-md border border-border-input bg-surface-primary px-2 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500"
+          aria-label={`Cantidad de la fila ${row.index}`}
+          className="w-20 rounded-md border border-border-input bg-surface-primary px-2 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+      ),
+    },
+    {
+      key: 'price',
+      header: 'Precio unit.',
+      cell: (row) => (
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          value={row.price}
+          placeholder="Opcional"
+          onChange={(event) => updateRow(row.index, { price: event.target.value })}
+          onClick={(event) => event.stopPropagation()}
+          aria-label={`Precio unitario de la fila ${row.index}`}
+          className="w-24 rounded-md border border-border-input bg-surface-primary px-2 py-1 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500 placeholder:text-text-muted"
+        />
+      ),
+    },
+    {
+      key: 'barcode',
+      header: 'Cód. barras',
+      cell: (row) => (
+        <input
+          value={row.barcode}
+          placeholder="Opcional"
+          onChange={(event) => updateRow(row.index, { barcode: event.target.value })}
+          onClick={(event) => event.stopPropagation()}
+          aria-label={`Código de barras de la fila ${row.index}`}
+          className="w-32 rounded-md border border-border-input bg-surface-primary px-2 py-1 font-mono text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500 placeholder:text-text-muted"
         />
       ),
     },
@@ -735,8 +1227,9 @@ B456\tTuerca 5/16\t20`}
         <div className="space-y-4">
           <p className="text-sm text-text-secondary">
             Se detectaron <strong>{table.columnCount}</strong> columnas y{' '}
-            <strong>{table.rows.length}</strong> filas. Elige qué representa cada una; lo que dejes
-            en “Ignorar” se descarta.
+            <strong>{table.rows.length}</strong> filas. Asignamos cada columna por su encabezado o
+            su contenido; revisa la propuesta y corrige lo que haga falta. Lo que dejes en
+            “Ignorar” se descarta.
           </p>
 
           <div className="divide-y divide-border-subtle rounded-lg border border-border-subtle">
@@ -755,7 +1248,7 @@ B456\tTuerca 5/16\t20`}
                     </p>
                   </div>
 
-                  <div className="sm:w-52">
+                  <div className="sm:w-60">
                     <Select
                       value={columnRole(index)}
                       onChange={(event) =>
@@ -763,8 +1256,11 @@ B456\tTuerca 5/16\t20`}
                       }
                       options={[
                         { value: 'ignore', label: 'Ignorar' },
-                        { value: 'code', label: 'Código (SKU)' },
+                        { value: 'code', label: 'Código del proveedor' },
                         { value: 'name', label: 'Nombre' },
+                        { value: 'barcode', label: 'Código de barras' },
+                        { value: 'quantity', label: 'Cantidad' },
+                        { value: 'price', label: 'Precio unitario' },
                       ]}
                       aria-label={`Rol de la columna ${index + 1}`}
                     />
@@ -818,10 +1314,143 @@ B456\tTuerca 5/16\t20`}
             </p>
           )}
 
+          {/* Datos de la factura: se aplican a todo el lote. */}
+          <div className="space-y-3 rounded-lg border border-border-subtle bg-surface-secondary/40 p-4">
+            <div>
+              <p className="text-sm font-medium text-text-primary">Datos de la carga</p>
+              <p className="text-xs text-text-tertiary">
+                Se aplican a todas las filas y quedan en la descripción de cada producto. La marca
+                se puede cambiar por fila en la tabla.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <SearchableSelect
+                label="Marca"
+                value={batchBrandId}
+                onChange={changeBatchBrand}
+                options={[
+                  { value: '', label: 'Sin marca' },
+                  ...brands.map((brand) => ({ value: brand.id, label: brand.name })),
+                ]}
+                placeholder="Busca o crea"
+                emptyText="Sin marcas"
+                onCreate={(name) => void handleCreateBrand(name)}
+                createLabel="Crear marca «{query}»"
+                isCreating={isCreatingBrand}
+              />
+
+              <SearchableSelect
+                label="Categoría"
+                value={batchCategoryId}
+                onChange={setBatchCategoryId}
+                options={[
+                  { value: '', label: 'Sin categoría' },
+                  ...categories.map((category) => ({
+                    value: category.id,
+                    label: category.name,
+                  })),
+                ]}
+                placeholder="Busca o crea una categoría"
+                emptyText="Sin categorías activas"
+                onCreate={(name) => void handleCreateCategory(name)}
+                createLabel="Crear categoría «{query}»"
+                isCreating={isCreatingCategory}
+              />
+
+              <SearchableSelect
+                label="Proveedor"
+                value={batchSupplierId}
+                onChange={setBatchSupplierId}
+                options={[
+                  { value: '', label: 'Sin proveedor' },
+                  ...suppliers.map((supplier) => ({
+                    value: supplier.id,
+                    label: supplier.name,
+                    description: supplier.tax_id,
+                  })),
+                ]}
+                placeholder="Busca o crea"
+                emptyText="Sin proveedores"
+                onCreate={(name) => void handleCreateSupplier(name)}
+                createLabel="Crear proveedor «{query}»"
+                isCreating={isCreatingSupplier}
+              />
+
+              <Select
+                label="Almacén"
+                value={batchWarehouseId}
+                onChange={(event) => {
+                  setBatchWarehouseId(event.target.value);
+                  setBatchLocationId('');
+                  setBatchErrors((prev) => ({ ...prev, warehouse: undefined }));
+                }}
+                options={activeWarehouses.map((warehouse) => ({
+                  value: warehouse.id,
+                  label: warehouse.name,
+                }))}
+                placeholder={activeWarehouses.length === 0 ? 'Sin almacenes' : 'Selecciona'}
+                error={batchErrors.warehouse}
+              />
+
+              <SearchableSelect
+                label="Ubicación"
+                value={batchLocationId}
+                onChange={setBatchLocationId}
+                options={[
+                  { value: '', label: 'Sin ubicación específica' },
+                  ...activeLocations
+                    .filter(
+                      (location) =>
+                        !batchWarehouseId || location.warehouse_id === batchWarehouseId,
+                    )
+                    .map((location) => ({
+                      value: location.id,
+                      label: `${location.code} · ${location.name}`,
+                      description: location.type,
+                    })),
+                ]}
+                placeholder="Busca o crea"
+                emptyText="Sin ubicaciones"
+                disabled={!batchWarehouseId}
+                onCreate={openLocationDraft}
+                createLabel="Crear ubicación «{query}»"
+              />
+
+              <Select
+                label="Lista de precios"
+                value={batchPriceListId}
+                onChange={(event) => {
+                  setBatchPriceListId(event.target.value);
+                  setBatchErrors((prev) => ({ ...prev, priceList: undefined }));
+                }}
+                options={priceLists.map((list) => ({ value: list.id, label: list.name }))}
+                placeholder={priceLists.length === 0 ? 'Sin listas' : 'Selecciona'}
+                error={batchErrors.priceList}
+              />
+
+              <Input
+                label="Nº factura"
+                value={batchInvoice}
+                onChange={(event) => setBatchInvoice(event.target.value)}
+                placeholder="Opcional"
+                maxLength={60}
+              />
+
+              <Input
+                label="Nº picking"
+                value={batchPicking}
+                onChange={(event) => setBatchPicking(event.target.value)}
+                placeholder="Opcional"
+                maxLength={60}
+              />
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-text-tertiary">
-              Corrige el código o el nombre directamente en la tabla. Las filas con un código ya
-              existente no se crean.
+              Corrige código, nombre, marca, cantidad o precio en la tabla. Las filas con un problema
+              no se crean.
             </p>
             <Button
               size="sm"
@@ -856,6 +1485,19 @@ B456\tTuerca 5/16\t20`}
             </p>
           </div>
 
+          {result.warnings.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-semantic-warning-800">
+                {result.warnings.length} aviso{result.warnings.length === 1 ? '' : 's'} de la carga
+              </p>
+              <ul className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-semantic-warning-400 bg-semantic-warning-50 p-3 text-sm text-semantic-warning-800">
+                {result.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {result.failures.length > 0 && (
             <div className="space-y-2">
               <p className="text-sm font-medium text-semantic-danger-700">
@@ -871,10 +1513,6 @@ B456\tTuerca 5/16\t20`}
               </ul>
             </div>
           )}
-
-          <p className="text-xs text-text-tertiary">
-            Completa marca y categoría de cada producto desde la lista de productos.
-          </p>
         </div>
       )}
 
@@ -896,6 +1534,92 @@ B456\tTuerca 5/16\t20`}
           </div>
         </div>
       )}
+
+      {/* Alta rápida de ubicación desde el buscador del lote */}
+      <Modal
+        isOpen={locationDraft !== null}
+        onClose={() => {
+          if (isSavingLocation) return;
+          setLocationDraft(null);
+        }}
+        title="Nueva ubicación"
+        subtitle="Se crea dentro del almacén del lote y queda elegida en la carga."
+        icon={<MapPin className="h-5 w-5" />}
+        size="md"
+        disableBackdropClose={isSavingLocation}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setLocationDraft(null)}
+              disabled={isSavingLocation}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void handleCreateLocation()}
+              isLoading={isSavingLocation}
+              leftIcon={<Plus className="h-4 w-4" />}
+            >
+              Crear ubicación
+            </Button>
+          </>
+        }
+      >
+        {locationDraft && (
+          <div className="space-y-4">
+            <Select
+              label="Almacén"
+              value={locationDraft.warehouse_id}
+              onChange={(event) =>
+                setLocationDraft((prev) =>
+                  prev ? { ...prev, warehouse_id: event.target.value } : prev,
+                )
+              }
+              options={activeWarehouses.map((warehouse) => ({
+                value: warehouse.id,
+                label: warehouse.name,
+              }))}
+              placeholder="Selecciona un almacén"
+              required
+            />
+
+            <Input
+              label="Nombre"
+              value={locationDraft.name}
+              onChange={(event) => {
+                const name = event.target.value;
+                setLocationDraft((prev) =>
+                  prev
+                    ? { ...prev, name, code: prev.code || suggestLocationCode(name) }
+                    : prev,
+                );
+              }}
+              required
+              maxLength={100}
+            />
+
+            <Input
+              label="Código"
+              value={locationDraft.code}
+              onChange={(event) =>
+                setLocationDraft((prev) =>
+                  prev ? { ...prev, code: event.target.value.toUpperCase() } : prev,
+                )
+              }
+              helperText="Único dentro del almacén."
+              required
+              maxLength={20}
+            />
+
+            {locationError && (
+              <p className="rounded-lg border border-semantic-danger-200 bg-semantic-danger-50 px-3 py-2 text-sm text-semantic-danger-700">
+                {locationError}
+              </p>
+            )}
+          </div>
+        )}
+      </Modal>
     </Modal>
   );
 }
